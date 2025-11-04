@@ -9,24 +9,10 @@
   <body>
     <header class="app-header">
       <h1>Note Vault</h1>
-      <div class="header-actions">
-        <button id="exportNotesBtn" title="Export all notes (JSON)">
-          Export
-        </button>
-        <label class="import-label" title="Import notes JSON">
-          Import
-          <input id="importNotesInput" type="file" accept="application/json" />
-        </label>
-      </div>
     </header>
 
     <main class="app-main">
       <section class="panel panel-left" aria-label="Note index">
-        <div class="panel-header">
-          <button id="scrollUpBtn" aria-label="Scroll up">▲</button>
-          <div class="panel-title">Notes</div>
-          <button id="scrollDownBtn" aria-label="Scroll down">▼</button>
-        </div>
         <div id="notesList" class="notes-list" role="list"></div>
       </section>
 
@@ -34,11 +20,6 @@
         <div class="viewer-header">
           <button id="expandBtn">Expand Note</button>
           <div class="viewer-title" id="viewerTitle">—</div>
-          <div class="viewer-pagination">
-            <button id="prevPageBtn" title="Previous page">Prev</button>
-            <span id="pageIndicator">Page 1</span>
-            <button id="nextPageBtn" title="Next page">Next</button>
-          </div>
         </div>
         <article id="viewer" class="viewer" aria-live="polite"></article>
       </section>
@@ -46,8 +27,6 @@
       <section class="panel panel-right" aria-label="Note editor">
         <div class="editor-header">
           <button id="addNoteBtn">Add New Note</button>
-          <button id="saveNoteBtn" class="primary">Save</button>
-          <button id="deleteNoteBtn" class="danger">Delete</button>
         </div>
         <form id="editorForm" class="editor" autocomplete="off">
           <label class="field">
@@ -70,11 +49,6 @@
 
           <div class="images-toolbar">
             <button type="button" id="addImageBtn">Add Image</button>
-            <button type="button" id="addPageBtn">Add Page</button>
-            <button type="button" id="removePageBtn" class="danger">
-              Remove Page
-            </button>
-            <span id="editPageIndicator" class="muted">Page 1</span>
           </div>
           <input id="imageInput" type="file" accept="image/*" multiple hidden />
 
@@ -87,6 +61,11 @@
               placeholder="Caption applies to selected image"
             />
           </label>
+
+          <div class="editor-actions">
+            <button id="saveNoteBtn" class="primary" type="button">Save Note</button>
+            <button id="deleteNoteBtn" class="danger" type="button">Delete Note</button>
+          </div>
         </form>
       </section>
     </main>
@@ -126,9 +105,8 @@
     <template id="noteListItemTemplate">
       <button class="note-item" role="listitem">
         <div class="thumb"></div>
-        <div class="meta">
+        <div class="thumb-overlay">
           <div class="title"></div>
-          <div class="subtitle"></div>
         </div>
       </button>
     </template>

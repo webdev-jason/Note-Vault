@@ -1,37 +1,90 @@
-// Data model and persistence
-const STORAGE_KEY = "notevault.v1.notes";
+// --- NEW DB HELPER (Vanilla IndexedDB) ---
+const DB_NAME = 'NoteVaultDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'notes_store';
+const KEY = 'all_notes'; // We will store the entire notes array as one object
+const LEGACY_STORAGE_KEY = "notevault.v1.notes"; // For migration
 
-/** @typedef {{ id:string, partId:string, createdAt:number, updatedAt:number, pages:Array<{ body:string, images:Array<{ id:string, dataUrl:string, caption:string, originalDataUrl?:string }> }> }} Note */
+const db = {
+  _db: null,
+
+  open() {
+    return new Promise((resolve, reject) => {
+      if (this._db) return resolve(this._db);
+
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onerror = (e) => {
+        console.error('Error opening IndexedDB', e);
+        reject(new Error('Could not open database.'));
+      };
+
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+
+      request.onsuccess = (e) => {
+        this._db = e.target.result;
+        resolve(this._db);
+      };
+    });
+  },
+
+  async get() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(KEY);
+
+      request.onerror = (e) => reject(new Error('Could not get notes.'));
+      request.onsuccess = (e) => {
+        resolve(e.target.result); // Returns undefined if not found
+      };
+    });
+  },
+
+  async set(data) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(data, KEY);
+
+      request.onerror = (e) => reject(new Error('Could not save notes.'));
+      request.onsuccess = (e) => resolve(e.target.result);
+    });
+  }
+};
+// --- END DB HELPER ---
+
+
+/** @typedef {{ id:string, partId:string, createdAt:number, updatedAt:number, body:string, images:Array<{ id:string, dataUrl:string, caption:string, originalDataUrl?:string }> }} Note */
 
 /** @type {Note[]} */
 let notes = [];
 let selectedNoteId = null;
-let selectedPageIndex = 0;
 let selectedImageId = null;
 
 const els = {
   notesList: document.getElementById("notesList"),
+  appMain: document.querySelector(".app-main"),
   viewer: document.getElementById("viewer"),
   viewerTitle: document.getElementById("viewerTitle"),
-  pageIndicator: document.getElementById("pageIndicator"),
-  prevPageBtn: document.getElementById("prevPageBtn"),
-  nextPageBtn: document.getElementById("nextPageBtn"),
   addNoteBtn: document.getElementById("addNoteBtn"),
   saveNoteBtn: document.getElementById("saveNoteBtn"),
   deleteNoteBtn: document.getElementById("deleteNoteBtn"),
   partIdInput: document.getElementById("partIdInput"),
-  notesInput: document.getElementById("notesInput"),
+  notesInput: document.getElementById("notesInput"), // This is the textarea
   addImageBtn: document.getElementById("addImageBtn"),
   imageInput: document.getElementById("imageInput"),
   imagesContainer: document.getElementById("imagesContainer"),
   imageCaptionInput: document.getElementById("imageCaptionInput"),
-  addPageBtn: document.getElementById("addPageBtn"),
-  removePageBtn: document.getElementById("removePageBtn"),
-  editPageIndicator: document.getElementById("editPageIndicator"),
   noteListItemTemplate: document.getElementById("noteListItemTemplate"),
   expandBtn: document.getElementById("expandBtn"),
-  exportNotesBtn: document.getElementById("exportNotesBtn"),
-  importNotesInput: document.getElementById("importNotesInput"),
   // Cropper
   cropperModal: document.getElementById("cropperModal"),
   cropperImage: document.getElementById("cropperImage"),
@@ -42,19 +95,53 @@ const els = {
   cropperApplyBtn: document.getElementById("cropperApplyBtn"),
 };
 
-function loadNotes() {
+async function loadNotes() {
+  let parsed = [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw) {
+      // Data found in old localStorage, start migration
+      console.log("Old localStorage data found. Attempting migration...");
+      parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) parsed = [];
+
+      // --- MIGRATION LOGIC to flatten 'pages' ---
+      const migrated = parsed.map(note => {
+        if (note.pages) {
+          console.log("Migrating old note:", note.partId);
+          const newNote = { ...note };
+          newNote.body = note.pages.map(p => p.body).join('\n\n');
+          newNote.images = note.pages.flatMap(p => p.images);
+          delete newNote.pages;
+          return newNote;
+        }
+        return note;
+      });
+      
+      console.log("Migration complete. Saving to IndexedDB.");
+      await db.set(migrated); // Save migrated data to new DB
+      localStorage.removeItem(LEGACY_STORAGE_KEY); // Clean up old data
+      return migrated;
+    }
+  } catch (e) {
+    console.error("Error migrating from localStorage:", e);
+    // If migration fails, try loading from DB anyway
   }
+
+  // No localStorage data, try to load from IndexedDB
+  const notesFromDB = await db.get();
+  return Array.isArray(notesFromDB) ? notesFromDB : [];
 }
 
-function saveNotes() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+
+async function saveNotes() {
+  // This function now saves the entire global 'notes' array to IndexedDB
+  try {
+    await db.set(notes);
+  } catch (e) {
+    console.error("Fatal error saving to IndexedDB:", e);
+    alert("FATAL ERROR: Could not save notes to database. " + e.message);
+  }
 }
 
 function generateId(prefix) {
@@ -66,76 +153,31 @@ function generateId(prefix) {
 function ensureSelection() {
   if (!selectedNoteId && notes.length > 0) {
     selectedNoteId = notes[0].id;
-    selectedPageIndex = 0;
   }
   if (selectedNoteId) {
     const note = notes.find((n) => n.id === selectedNoteId);
     if (!note) {
       selectedNoteId = null;
-      selectedPageIndex = 0;
-    } else if (selectedPageIndex >= note.pages.length) {
-      selectedPageIndex = 0;
     }
   }
 }
 
-// Rendering
-function renderNotesList() {
-  els.notesList.innerHTML = "";
-  notes
-    .slice()
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .forEach((note) => {
-      const clone = /** @type {HTMLButtonElement} */ (
-        els.noteListItemTemplate.content.firstElementChild.cloneNode(true)
-      );
-      const thumb = clone.querySelector(".thumb");
-      const title = clone.querySelector(".title");
-      const subtitle = clone.querySelector(".subtitle");
-      const firstImg = note.pages[0]?.images[0]?.dataUrl || "";
-      if (firstImg && thumb) thumb.style.backgroundImage = `url(${firstImg})`;
-      if (title) title.textContent = note.partId || "Untitled";
-      if (subtitle) subtitle.textContent = `Pages: ${note.pages.length}`;
-      if (note.id === selectedNoteId) clone.classList.add("active");
-      clone.addEventListener("click", () => {
-        selectedNoteId = note.id;
-        selectedPageIndex = 0;
-        selectedImageId = null;
-        renderAll();
-      });
-      els.notesList.appendChild(clone);
-    });
-}
-
-function renderViewer() {
-  const note = notes.find((n) => n.id === selectedNoteId);
-  if (!note) {
-    els.viewerTitle.textContent = "—";
-    els.pageIndicator.textContent = "Page 0";
-    els.viewer.innerHTML =
-      '<div class="muted">Select or create a note to view.</div>';
-    return;
-  }
-  const page = note.pages[selectedPageIndex] || { body: "", images: [] };
-  els.viewerTitle.textContent = note.partId || "Untitled";
-  els.pageIndicator.textContent = `Page ${selectedPageIndex + 1} / ${
-    note.pages.length
-  }`;
-
+/**
+ * Creates the DOM fragment for a note's content (body + images)
+ * @param {Note} note
+ * @returns {DocumentFragment}
+ */
+function createNoteContentView(note) {
   const frag = document.createDocumentFragment();
-  const h = document.createElement("div");
-  h.className = "note-title";
-  h.textContent = note.partId;
-  frag.appendChild(h);
 
   const body = document.createElement("div");
   body.className = "note-body";
-  body.textContent = page.body || "";
+  body.textContent = note.body || ""; // Body is a single string
   frag.appendChild(body);
 
   const imagesWrap = document.createElement("div");
   imagesWrap.className = "images";
-  page.images.forEach((img) => {
+  note.images.forEach((img) => {
     const card = document.createElement("div");
     card.className = "image-card";
     const frame = document.createElement("div");
@@ -154,12 +196,81 @@ function renderViewer() {
     imagesWrap.appendChild(card);
   });
   frag.appendChild(imagesWrap);
+  return frag;
+}
 
+// Rendering
+function renderNotesList() {
+  els.notesList.innerHTML = "";
+  notes
+    .slice()
+    .sort((a, b) => a.partId.localeCompare(b.partId))
+    .forEach((note) => {
+      const clone = /** @type {HTMLButtonElement} */ (
+        els.noteListItemTemplate.content.firstElementChild.cloneNode(true)
+      );
+      const thumb = clone.querySelector(".thumb");
+      
+      // Create the scaled preview
+      const content = createNoteContentView(note);
+      const scaleWrapper = document.createElement('div');
+      scaleWrapper.className = 'thumb-scale-wrap';
+      scaleWrapper.appendChild(content);
+      
+      thumb.innerHTML = ""; // Clear existing content
+      thumb.appendChild(scaleWrapper);
+
+      const title = clone.querySelector(".title");
+      
+      if (note.id === selectedNoteId) clone.classList.add("active");
+      
+      // Append to DOM *first*
+      els.notesList.appendChild(clone);
+
+      // Run sizing logic *after* element is in the DOM
+      if (title) {
+        title.textContent = note.partId || "Untitled";
+        
+        // Use requestAnimationFrame to wait for browser to compute styles
+        requestAnimationFrame(() => {
+          title.style.fontSize = '14px'; // 1. Reset
+          let fontSize = 14;
+          
+          const containerWidth = title.clientWidth; // 2. Get container width
+          let textWidth = title.scrollWidth;       // 3. Get text width
+
+          // 4. Loop and shrink
+          while (textWidth > containerWidth && fontSize > 8) {
+            fontSize--;
+            title.style.fontSize = `${fontSize}px`;
+            textWidth = title.scrollWidth;
+          }
+        });
+      }
+
+      clone.addEventListener("click", () => {
+        selectedNoteId = note.id;
+        selectedImageId = null;
+        renderAll();
+      });
+    });
+}
+
+function renderViewer() {
+  const note = notes.find((n) => n.id === selectedNoteId);
+  if (!note) {
+    els.viewerTitle.textContent = "—";
+    els.viewer.innerHTML =
+      '<div class="muted">Select or create a note to view.</div>';
+    return;
+  }
+  
+  els.viewerTitle.textContent = note.partId || "Untitled";
+
+  // Use the new shared function
+  const content = createNoteContentView(note);
   els.viewer.innerHTML = "";
-  els.viewer.appendChild(frag);
-
-  els.prevPageBtn.disabled = selectedPageIndex <= 0;
-  els.nextPageBtn.disabled = selectedPageIndex >= note.pages.length - 1;
+  els.viewer.appendChild(content);
 }
 
 function renderEditor() {
@@ -171,18 +282,14 @@ function renderEditor() {
     els.partIdInput.value = "";
     els.notesInput.value = "";
     els.imagesContainer.innerHTML = "";
-    els.editPageIndicator.textContent = "Page 0";
     return;
   }
-  const page = note.pages[selectedPageIndex];
+  
   els.partIdInput.value = note.partId;
-  els.notesInput.value = page.body;
-  els.editPageIndicator.textContent = `Page ${selectedPageIndex + 1} / ${
-    note.pages.length
-  }`;
+  els.notesInput.value = note.body; // Set the single textarea value
 
   els.imagesContainer.innerHTML = "";
-  page.images.forEach((img) => {
+  note.images.forEach((img) => {
     const card = document.createElement("div");
     card.className = "img-card";
     if (img.id === selectedImageId) card.classList.add("active");
@@ -224,7 +331,7 @@ function renderEditor() {
     els.imagesContainer.appendChild(card);
   });
 
-  const selectedImg = page.images.find((i) => i.id === selectedImageId);
+  const selectedImg = note.images.find((i) => i.id === selectedImageId);
   els.imageCaptionInput.value = selectedImg ? selectedImg.caption || "" : "";
 }
 
@@ -235,75 +342,50 @@ function renderAll() {
   renderEditor();
 }
 
-// Mutations
-function createNote() {
+// Mutations (NOW ASYNC)
+async function createNote() {
   const newNote = {
     id: generateId("note"),
     partId: "Untitled",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    pages: [{ body: "", images: [] }],
+    body: "", // Body is a single string
+    images: [],
   };
   notes.unshift(newNote);
   selectedNoteId = newNote.id;
-  selectedPageIndex = 0;
   selectedImageId = null;
-  saveNotes();
+  await saveNotes();
   renderAll();
 }
 
-function saveCurrentNote() {
+async function saveCurrentNote() {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
   note.partId = els.partIdInput.value.trim() || "Untitled";
-  note.pages[selectedPageIndex].body = els.notesInput.value;
+  note.body = els.notesInput.value; // Get value from the single textarea
   note.updatedAt = Date.now();
-  saveNotes();
+  await saveNotes();
   renderAll();
 }
 
-function deleteCurrentNote() {
+async function deleteCurrentNote() {
   if (!selectedNoteId) return;
   const idx = notes.findIndex((n) => n.id === selectedNoteId);
   if (idx >= 0) notes.splice(idx, 1);
   selectedNoteId = null;
-  selectedPageIndex = 0;
   selectedImageId = null;
-  saveNotes();
+  await saveNotes();
   renderAll();
 }
 
-function addPage() {
+async function addImagesFromFiles(fileList) {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
-  note.pages.splice(selectedPageIndex + 1, 0, { body: "", images: [] });
-  selectedPageIndex += 1;
-  note.updatedAt = Date.now();
-  saveNotes();
-  renderAll();
-}
-
-function removePage() {
-  const note = notes.find((n) => n.id === selectedNoteId);
-  if (!note) return;
-  if (note.pages.length <= 1) return;
-  note.pages.splice(selectedPageIndex, 1);
-  selectedPageIndex = Math.max(0, selectedPageIndex - 1);
-  selectedImageId = null;
-  note.updatedAt = Date.now();
-  saveNotes();
-  renderAll();
-}
-
-function addImagesFromFiles(fileList) {
-  const note = notes.find((n) => n.id === selectedNoteId);
-  if (!note) return;
-  const page = note.pages[selectedPageIndex];
   const files = Array.from(fileList || []);
   if (files.length === 0) return;
   
-  // Validate file sizes (warn if very large, but still allow)
-  const maxSize = 50 * 1024 * 1024; // 50MB per file
+  const maxSize = 50 * 1024 * 1024;
   const oversized = files.filter(f => f.size > maxSize);
   if (oversized.length > 0) {
     if (!confirm(`${oversized.length} file(s) are larger than 50MB. Large images may cause performance issues. Continue anyway?`)) {
@@ -320,7 +402,7 @@ function addImagesFromFiles(fileList) {
       try {
         const data = String(reader.result);
         const compressed = await compressDataUrl(data, { maxWidth: 3000, maxHeight: 3000, quality: 0.88 });
-        page.images.push({
+        note.images.push({
           id: generateId("img"),
           dataUrl: compressed,
           originalDataUrl: compressed,
@@ -329,25 +411,25 @@ function addImagesFromFiles(fileList) {
         if (--pending === 0 && !hasError) {
           note.updatedAt = Date.now();
           try {
-            saveNotes();
+            await saveNotes();
             renderAll();
           } catch (err) {
-            console.error("Error saving notes (possibly localStorage quota exceeded):", err);
+            console.error("Error saving notes (possibly quota exceeded):", err);
             alert("Error saving notes. Trying a smaller optimized version...");
-            const startIdx = Math.max(0, page.images.length - files.length);
-            for (let i = startIdx; i < page.images.length; i++) {
-              const img = page.images[i];
+            const startIdx = Math.max(0, note.images.length - files.length);
+            for (let i = startIdx; i < note.images.length; i++) {
+              const img = note.images[i];
               const smaller = await compressDataUrl(img.dataUrl, { maxWidth: 1800, maxHeight: 1800, quality: 0.8 });
               img.dataUrl = smaller;
               img.originalDataUrl = smaller;
             }
             try {
-              saveNotes();
+              await saveNotes();
               renderAll();
             } catch (err2) {
               console.error("Save still failed after recompressing:", err2);
               alert("Still too large to save in browser storage. Consider smaller images.");
-              page.images.splice(page.images.length - files.length);
+              note.images.splice(note.images.length - files.length);
               renderAll();
             }
           }
@@ -371,11 +453,10 @@ function addImagesFromFiles(fileList) {
     };
     reader.readAsDataURL(file);
   });
-  // Reset file input so the same file can be selected again
   els.imageInput.value = "";
 }
 
-// Utilities to compress image data URLs to reduce localStorage usage
+// Utilities to compress image data URLs
 function loadImageFromDataUrl(dataUrl) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -405,55 +486,33 @@ async function compressDataUrl(dataUrl, opts) {
   }
 }
 
-function updateSelectedImageCaption(value) {
+async function updateSelectedImageCaption(value) {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
-  const page = note.pages[selectedPageIndex];
-  const img = page.images.find((i) => i.id === selectedImageId);
+  const img = note.images.find((i) => i.id === selectedImageId);
   if (!img) return;
   img.caption = value;
   note.updatedAt = Date.now();
-  saveNotes();
+  await saveNotes();
   renderEditor();
   renderViewer();
 }
 
-function removeImage(imageId) {
+async function removeImage(imageId) {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
-  const page = note.pages[selectedPageIndex];
-  const idx = page.images.findIndex((i) => i.id === imageId);
-  if (idx >= 0) page.images.splice(idx, 1);
+  const idx = note.images.findIndex((i) => i.id === imageId);
+  if (idx >= 0) note.images.splice(idx, 1);
   if (selectedImageId === imageId) selectedImageId = null;
   note.updatedAt = Date.now();
-  saveNotes();
+  await saveNotes();
   renderAll();
 }
 
-// Pagination controls
-els.prevPageBtn.addEventListener("click", () => {
-  const note = notes.find((n) => n.id === selectedNoteId);
-  if (!note) return;
-  selectedPageIndex = Math.max(0, selectedPageIndex - 1);
-  selectedImageId = null;
-  renderAll();
-});
-els.nextPageBtn.addEventListener("click", () => {
-  const note = notes.find((n) => n.id === selectedNoteId);
-  if (!note) return;
-  selectedPageIndex = Math.min(note.pages.length - 1, selectedPageIndex + 1);
-  selectedImageId = null;
-  renderAll();
-});
-
-// Note actions
+// Note actions (now async)
 els.addNoteBtn.addEventListener("click", createNote);
 els.saveNoteBtn.addEventListener("click", saveCurrentNote);
 els.deleteNoteBtn.addEventListener("click", deleteCurrentNote);
-
-// Page actions
-els.addPageBtn.addEventListener("click", addPage);
-els.removePageBtn.addEventListener("click", removePage);
 
 // Image upload
 els.addImageBtn.addEventListener("click", () => els.imageInput.click());
@@ -461,47 +520,27 @@ els.imageInput.addEventListener("change", (e) =>
   addImagesFromFiles(e.target.files)
 );
 
-// Caption input
+// Caption input (now async)
 els.imageCaptionInput.addEventListener("input", (e) =>
   updateSelectedImageCaption(e.target.value)
 );
 
-// Export/Import
-els.exportNotesBtn.addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(notes, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "notevault-export.json";
-  a.click();
-  URL.revokeObjectURL(url);
-});
-els.importNotesInput.addEventListener("change", (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(String(reader.result));
-      if (Array.isArray(imported)) {
-        notes = imported;
-        selectedNoteId = notes[0]?.id || null;
-        selectedPageIndex = 0;
-        selectedImageId = null;
-        saveNotes();
-        renderAll();
-      }
-    } catch {}
-  };
-  reader.readAsText(file);
-});
+// Horizontal scroll for image editor
+els.imagesContainer.addEventListener("wheel", (e) => {
+  if (e.deltaY !== 0) {
+    e.preventDefault();
+    els.imagesContainer.scrollLeft += e.deltaY;
+  }
+}, { passive: false });
 
 // Expand (toggle full screen center)
 els.expandBtn.addEventListener("click", () => {
-  const center = document.querySelector(".panel-center");
-  center.classList.toggle("expanded");
+  const isExpanded = els.appMain.classList.toggle("view-expanded");
+  if (isExpanded) {
+    els.expandBtn.textContent = "Collapse Note";
+  } else {
+    els.expandBtn.textContent = "Expand Note";
+  }
 });
 
 // Simple cropper implementation (1:1)
@@ -514,17 +553,17 @@ let cropperState = {
   zoom: 1,
 };
 
-function openCropper(imgObj) {
+async function openCropper(imgObj) {
   if (!imgObj.originalDataUrl) {
     imgObj.originalDataUrl = imgObj.dataUrl;
-    saveNotes();
+    await saveNotes();
   }
   els.cropperImage.src = imgObj.originalDataUrl || imgObj.dataUrl;
   cropperState.imageId = imgObj.id;
   els.cropperModal.setAttribute("aria-hidden", "false");
   selectedImageId = imgObj.id;
   setZoom(1);
-  // Wait for image to layout
+  
   requestAnimationFrame(() => {
     const rect = getDisplayedImageRect();
     cropperState.imgRect = rect;
@@ -562,7 +601,7 @@ function positionCropBox(viewX, viewY, viewSize) {
   syncCropControls();
 }
 
-// Drag/resize crop box (resize via wheel; drag via pointer)
+// Drag/resize crop box
 let dragging = false;
 let dragOffset = { x: 0, y: 0 };
 els.cropBox.addEventListener("pointerdown", (e) => {
@@ -593,7 +632,6 @@ els.cropBox.addEventListener(
   { passive: false }
 );
 
-// Click image to center crop box at cursor
 els.cropperImage.addEventListener("click", (e) => {
   const stage = getDisplayedImageRect();
   const cbRect = els.cropBox.getBoundingClientRect();
@@ -603,7 +641,6 @@ els.cropperImage.addEventListener("click", (e) => {
   positionCropBox(targetX, targetY, size);
 });
 
-// Keyboard nudge when crop box focused
 els.cropBox.addEventListener("keydown", (e) => {
   const rect = els.cropBox.getBoundingClientRect();
   const step = e.shiftKey ? 10 : 2;
@@ -674,17 +711,14 @@ cropSizeRange?.addEventListener("input", (e) => {
   positionCropBox(rect.left, rect.top, size);
 });
 
-// Zoom controls (internal, no UI)
 function setZoom(z) {
   const zoom = Math.max(0.25, Math.min(z, 3));
   cropperState.zoom = zoom;
   els.cropperImage.style.setProperty('--crop-zoom', String(zoom));
-  // After zooming, re-clamp crop box to image bounds
   const rect = els.cropBox.getBoundingClientRect();
   positionCropBox(rect.left, rect.top, rect.width);
 }
 
-// Add corner handles to the crop box (once)
 if (!els.cropBox.querySelector('.handle')) {
   ['nw','ne','sw','se'].forEach(dir => {
     const h = document.createElement('div');
@@ -704,7 +738,6 @@ function beginResize(e, corner) {
   resizing = true;
   resizeCorner = corner;
   const rect = els.cropBox.getBoundingClientRect();
-  // Anchor is the opposite corner
   if (corner === 'nw') resizeAnchor = { x: rect.right, y: rect.bottom };
   if (corner === 'ne') resizeAnchor = { x: rect.left, y: rect.bottom };
   if (corner === 'sw') resizeAnchor = { x: rect.right, y: rect.top };
@@ -739,7 +772,6 @@ window.addEventListener('pointermove', (e) => {
 
 window.addEventListener('pointerup', () => { resizing = false; });
 
-// Compute the displayed image rectangle inside the stage, respecting aspect ratio and zoom
 function getDisplayedImageRect() {
   const stage = els.cropperStage.getBoundingClientRect();
   const natW = cropperState.naturalWidth || 1;
@@ -752,18 +784,17 @@ function getDisplayedImageRect() {
   return { left, top, width: w, height: h, right: left + w, bottom: top + h };
 }
 
-els.cropperApplyBtn.addEventListener("click", () => {
+els.cropperApplyBtn.addEventListener("click", async () => {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
-  const page = note.pages[selectedPageIndex];
-  const img = page.images.find((i) => i.id === cropperState.imageId);
+  const img = note.images.find((i) => i.id === cropperState.imageId);
   if (!img) return;
 
   const stage = getDisplayedImageRect();
   const { x, y, size } = cropperState.crop;
   const relX = (x - stage.left) / stage.width;
   const relY = (y - stage.top) / stage.height;
-  const relSize = size / stage.width; // assume square pixels and fit within width reference
+  const relSize = size / stage.width; 
 
   const sx = Math.max(
     0,
@@ -780,7 +811,7 @@ els.cropperApplyBtn.addEventListener("click", () => {
   );
 
   const canvas = document.createElement("canvas");
-  canvas.width = 1024; // export size
+  canvas.width = 1024;
   canvas.height = 1024;
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingQuality = "high";
@@ -788,7 +819,7 @@ els.cropperApplyBtn.addEventListener("click", () => {
   img.dataUrl = canvas.toDataURL("image/jpeg", 0.92);
 
   note.updatedAt = Date.now();
-  saveNotes();
+  await saveNotes();
   closeCropper();
   renderAll();
 });
@@ -803,23 +834,24 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// Bootstrap
-notes = loadNotes();
-if (notes.length === 0) {
-  // Seed with example note per Notevault.md description
-  notes.push({
-    id: generateId("note"),
-    partId: "KNX0400",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    pages: [
-      {
-        body: '100% visual look for cable flexibility. AQL steps...\nIP columns D, E, F: Keyence 7020 program "KNX0400 High Precision Cable Side". Then, Keyence 7020, then M14 threads...',
-        images: [],
-      },
-    ],
-  });
-}
-selectedNoteId = notes[0]?.id || null;
-selectedPageIndex = 0;
-renderAll();
+// Bootstrap (NOW ASYNC)
+(async () => {
+  notes = await loadNotes();
+  
+  if (notes.length === 0) {
+    // Seed with example note
+    notes.push({
+      id: generateId("note"),
+      partId: "KNX0400",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      body: '100% visual look for cable flexibility. AQL steps...\nIP columns D, E, F: Keyence 7020 program "KNX0400 High Precision Cable Side". Then, Keyence 7020, then M14 threads...',
+      images: [],
+    });
+    // Save the seed note
+    await saveNotes();
+  }
+  
+  selectedNoteId = notes[0]?.id || null;
+  renderAll();
+})();
