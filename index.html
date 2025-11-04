@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Note Vault</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Note Vault</h1>
+      <div class="header-actions">
+        <button id="exportNotesBtn" title="Export all notes (JSON)">
+          Export
+        </button>
+        <label class="import-label" title="Import notes JSON">
+          Import
+          <input id="importNotesInput" type="file" accept="application/json" />
+        </label>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="panel panel-left" aria-label="Note index">
+        <div class="panel-header">
+          <button id="scrollUpBtn" aria-label="Scroll up">▲</button>
+          <div class="panel-title">Notes</div>
+          <button id="scrollDownBtn" aria-label="Scroll down">▼</button>
+        </div>
+        <div id="notesList" class="notes-list" role="list"></div>
+      </section>
+
+      <section class="panel panel-center" aria-label="Note viewer">
+        <div class="viewer-header">
+          <button id="expandBtn">Expand Note</button>
+          <div class="viewer-title" id="viewerTitle">—</div>
+          <div class="viewer-pagination">
+            <button id="prevPageBtn" title="Previous page">Prev</button>
+            <span id="pageIndicator">Page 1</span>
+            <button id="nextPageBtn" title="Next page">Next</button>
+          </div>
+        </div>
+        <article id="viewer" class="viewer" aria-live="polite"></article>
+      </section>
+
+      <section class="panel panel-right" aria-label="Note editor">
+        <div class="editor-header">
+          <button id="addNoteBtn">Add New Note</button>
+          <button id="saveNoteBtn" class="primary">Save</button>
+          <button id="deleteNoteBtn" class="danger">Delete</button>
+        </div>
+        <form id="editorForm" class="editor" autocomplete="off">
+          <label class="field">
+            <span>PART ID</span>
+            <input
+              id="partIdInput"
+              type="text"
+              placeholder="e.g., KNX0400"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>INSPECTION NOTES</span>
+            <textarea
+              id="notesInput"
+              rows="10"
+              placeholder="Enter details, steps, references..."
+            ></textarea>
+          </label>
+
+          <div class="images-toolbar">
+            <button type="button" id="addImageBtn">Add Image</button>
+            <button type="button" id="addPageBtn">Add Page</button>
+            <button type="button" id="removePageBtn" class="danger">
+              Remove Page
+            </button>
+            <span id="editPageIndicator" class="muted">Page 1</span>
+          </div>
+          <input id="imageInput" type="file" accept="image/*" multiple hidden />
+
+          <div id="imagesContainer" class="images-container"></div>
+          <label class="field">
+            <span>Image caption (optional)</span>
+            <input
+              id="imageCaptionInput"
+              type="text"
+              placeholder="Caption applies to selected image"
+            />
+          </label>
+        </form>
+      </section>
+    </main>
+
+    <div
+      id="cropperModal"
+      class="modal"
+      aria-hidden="true"
+      role="dialog"
+      aria-label="Image cropper"
+    >
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>Crop Image (1:1)</div>
+          <button id="cropperCloseBtn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="cropper-stage">
+            <img id="cropperImage" alt="To crop" />
+            <div id="cropBox" class="crop-box" tabindex="0"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+            <div class="crop-controls">
+              <button id="cropMinusBtn" title="Smaller">−</button>
+              <input id="cropSizeRange" type="range" min="40" max="800" value="300" />
+              <button id="cropPlusBtn" title="Larger">+</button>
+              <button id="cropCenterBtn" title="Center crop box">Center</button>
+              <span class="muted">Tip: Drag to move, drag corners to resize, wheel to resize</span>
+            </div>
+          <button id="cropperCancelBtn">Cancel</button>
+          <button id="cropperApplyBtn" class="primary">Apply Crop</button>
+        </div>
+      </div>
+    </div>
+
+    <template id="noteListItemTemplate">
+      <button class="note-item" role="listitem">
+        <div class="thumb"></div>
+        <div class="meta">
+          <div class="title"></div>
+          <div class="subtitle"></div>
+        </div>
+      </button>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
