@@ -93,6 +93,10 @@ const els = {
   cropperCloseBtn: document.getElementById("cropperCloseBtn"),
   cropperCancelBtn: document.getElementById("cropperCancelBtn"),
   cropperApplyBtn: document.getElementById("cropperApplyBtn"),
+  // NEW Image Viewer
+  imageViewerModal: document.getElementById("imageViewerModal"),
+  modalViewerImage: document.getElementById("modalViewerImage"),
+  modalViewerCloseBtn: document.getElementById("modalViewerCloseBtn"),
 };
 
 async function loadNotes() {
@@ -194,6 +198,12 @@ function createNoteContentView(note) {
       card.appendChild(cap);
     }
     imagesWrap.appendChild(card);
+
+    // NEW click listener
+    card.addEventListener("click", () => {
+      els.modalViewerImage.src = img.dataUrl;
+      els.imageViewerModal.setAttribute("aria-hidden", "false");
+    });
   });
   frag.appendChild(imagesWrap);
   return frag;
@@ -204,7 +214,7 @@ function renderNotesList() {
   els.notesList.innerHTML = "";
   notes
     .slice()
-    .sort((a, b) => a.partId.localeCompare(b.partId))
+    .sort((a, b) => a.partId.localeCompare(b.partId)) // Sort alphabetically
     .forEach((note) => {
       const clone = /** @type {HTMLButtonElement} */ (
         els.noteListItemTemplate.content.firstElementChild.cloneNode(true)
@@ -346,7 +356,7 @@ function renderAll() {
 async function createNote() {
   const newNote = {
     id: generateId("note"),
-    partId: "Untitled",
+    partId: "", // Changed from "Untitled"
     createdAt: Date.now(),
     updatedAt: Date.now(),
     body: "", // Body is a single string
@@ -362,7 +372,7 @@ async function createNote() {
 async function saveCurrentNote() {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
-  note.partId = els.partIdInput.value.trim() || "Untitled";
+  note.partId = els.partIdInput.value.trim() || "Untitled"; // Saves as "Untitled" if blank
   note.body = els.notesInput.value; // Get value from the single textarea
   note.updatedAt = Date.now();
   await saveNotes();
@@ -825,6 +835,20 @@ els.cropperApplyBtn.addEventListener("click", async () => {
 });
 els.cropperCloseBtn.addEventListener("click", closeCropper);
 els.cropperCancelBtn.addEventListener("click", closeCropper);
+
+// NEW Image Viewer Listeners
+function closeImageViewer() {
+  els.imageViewerModal.setAttribute("aria-hidden", "true");
+  els.modalViewerImage.src = ""; // Clear image
+}
+els.modalViewerCloseBtn.addEventListener("click", closeImageViewer);
+// Also close by clicking backdrop
+els.imageViewerModal.addEventListener("click", (e) => {
+  if (e.target === els.imageViewerModal) {
+    closeImageViewer();
+  }
+});
+
 
 // Keyboard helpers
 window.addEventListener("keydown", (e) => {

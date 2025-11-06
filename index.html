@@ -34,7 +34,7 @@
             <input
               id="partIdInput"
               type="text"
-              placeholder="e.g., KNX0400"
+              placeholder="PART ID"
               required
             />
           </label>
@@ -98,6 +98,23 @@
             </div>
           <button id="cropperCancelBtn">Cancel</button>
           <button id="cropperApplyBtn" class="primary">Apply Crop</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="imageViewerModal"
+      class="modal"
+      aria-hidden="true"
+      role="dialog"
+      aria-label="Image viewer"
+    >
+      <div class="modal-dialog">
+        <div class="modal-body" style="padding: 10px;">
+          <img id="modalViewerImage" alt="Zoomed image" />
+        </div>
+        <div class="modal-footer">
+          <button id="modalViewerCloseBtn">Close</button>
         </div>
       </div>
     </div>

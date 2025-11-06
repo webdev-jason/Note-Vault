@@ -217,7 +217,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .viewer .images { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
 .viewer .image-card { display: flex; flex-direction: column; margin: 0; background: transparent; border: none; }
-.viewer .image-card .image-frame { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.viewer .image-card .image-frame {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+}
 .viewer .image-card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; }
 .viewer .image-card .caption { margin-top: 6px; padding: 6px 8px; color: var(--muted); font-size: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
 .viewer .image-card .caption:empty { display: none; padding: 0; border-top: none; }
@@ -282,6 +288,24 @@ input[type="text"], textarea { width: 100%; padding: 8px 10px; background: var(-
 .editor-actions button {
   min-width: 120px;
 }
+
+
+/* --- NEW Image Viewer Styles --- */
+#modalViewerImage {
+  display: block;
+  width: 100%;
+  max-height: 80vh; /* Don't be taller than the viewport */
+  object-fit: contain; /* Don't stretch */
+  border-radius: 8px; /* Match panel style */
+}
+/* THIS IS THE MODIFIED RULE */
+#imageViewerModal .modal-footer {
+  justify-content: center; /* Center the close button */
+}
+#modalViewerCloseBtn {
+  min-width: 120px;
+}
+/* --- END Image Viewer Styles --- */
 
 
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 20px; }
