@@ -13,12 +13,16 @@
 
     <main class="app-main">
       <section class="panel panel-left" aria-label="Note index">
+        <div class="panel-header">
+          <input type="text" id="searchInput" placeholder="Filter by Part ID..." />
+        </div>
         <div id="notesList" class="notes-list" role="list"></div>
       </section>
 
       <section class="panel panel-center" aria-label="Note viewer">
         <div class="viewer-header">
           <button id="expandBtn">Expand Note</button>
+          <button id="printBtn">Print</button>
           <div class="viewer-title" id="viewerTitle">—</div>
         </div>
         <article id="viewer" class="viewer" aria-live="polite"></article>

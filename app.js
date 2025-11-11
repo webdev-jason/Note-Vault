@@ -68,9 +68,11 @@ const db = {
 let notes = [];
 let selectedNoteId = null;
 let selectedImageId = null;
+let imageViewerZoom = 1;
 
 const els = {
   notesList: document.getElementById("notesList"),
+  searchInput: document.getElementById("searchInput"),
   appMain: document.querySelector(".app-main"),
   viewer: document.getElementById("viewer"),
   viewerTitle: document.getElementById("viewerTitle"),
@@ -78,13 +80,14 @@ const els = {
   saveNoteBtn: document.getElementById("saveNoteBtn"),
   deleteNoteBtn: document.getElementById("deleteNoteBtn"),
   partIdInput: document.getElementById("partIdInput"),
-  notesInput: document.getElementById("notesInput"), // This is the textarea
+  notesInput: document.getElementById("notesInput"),
   addImageBtn: document.getElementById("addImageBtn"),
   imageInput: document.getElementById("imageInput"),
   imagesContainer: document.getElementById("imagesContainer"),
   imageCaptionInput: document.getElementById("imageCaptionInput"),
   noteListItemTemplate: document.getElementById("noteListItemTemplate"),
   expandBtn: document.getElementById("expandBtn"),
+  printBtn: document.getElementById("printBtn"), // NEW
   // Cropper
   cropperModal: document.getElementById("cropperModal"),
   cropperImage: document.getElementById("cropperImage"),
@@ -93,7 +96,7 @@ const els = {
   cropperCloseBtn: document.getElementById("cropperCloseBtn"),
   cropperCancelBtn: document.getElementById("cropperCancelBtn"),
   cropperApplyBtn: document.getElementById("cropperApplyBtn"),
-  // NEW Image Viewer
+  // Image Viewer
   imageViewerModal: document.getElementById("imageViewerModal"),
   modalViewerImage: document.getElementById("modalViewerImage"),
   modalViewerCloseBtn: document.getElementById("modalViewerCloseBtn"),
@@ -129,7 +132,6 @@ async function loadNotes() {
     }
   } catch (e) {
     console.error("Error migrating from localStorage:", e);
-    // If migration fails, try loading from DB anyway
   }
 
   // No localStorage data, try to load from IndexedDB
@@ -139,7 +141,6 @@ async function loadNotes() {
 
 
 async function saveNotes() {
-  // This function now saves the entire global 'notes' array to IndexedDB
   try {
     await db.set(notes);
   } catch (e) {
@@ -155,14 +156,14 @@ function generateId(prefix) {
 }
 
 function ensureSelection() {
-  if (!selectedNoteId && notes.length > 0) {
-    selectedNoteId = notes[0].id;
-  }
-  if (selectedNoteId) {
-    const note = notes.find((n) => n.id === selectedNoteId);
-    if (!note) {
-      selectedNoteId = null;
-    }
+  const note = notes.find((n) => n.id === selectedNoteId);
+  if (!note) {
+    const filterText = els.searchInput.value.toLowerCase().trim();
+    const filteredNotes = notes.filter(n => {
+      if (filterText === "") return true;
+      return n.partId.toLowerCase().includes(filterText);
+    });
+    selectedNoteId = (filteredNotes.length > 0) ? filteredNotes[0].id : null;
   }
 }
 
@@ -176,7 +177,7 @@ function createNoteContentView(note) {
 
   const body = document.createElement("div");
   body.className = "note-body";
-  body.textContent = note.body || ""; // Body is a single string
+  body.textContent = note.body || "";
   frag.appendChild(body);
 
   const imagesWrap = document.createElement("div");
@@ -199,7 +200,6 @@ function createNoteContentView(note) {
     }
     imagesWrap.appendChild(card);
 
-    // NEW click listener
     card.addEventListener("click", () => {
       els.modalViewerImage.src = img.dataUrl;
       els.imageViewerModal.setAttribute("aria-hidden", "false");
@@ -211,45 +211,43 @@ function createNoteContentView(note) {
 
 // Rendering
 function renderNotesList() {
+  const filterText = els.searchInput.value.toLowerCase().trim();
+
   els.notesList.innerHTML = "";
   notes
-    .slice()
-    .sort((a, b) => a.partId.localeCompare(b.partId)) // Sort alphabetically
+    .filter(note => {
+      if (filterText === "") return true;
+      return note.partId.toLowerCase().includes(filterText);
+    })
     .forEach((note) => {
       const clone = /** @type {HTMLButtonElement} */ (
         els.noteListItemTemplate.content.firstElementChild.cloneNode(true)
       );
       const thumb = clone.querySelector(".thumb");
       
-      // Create the scaled preview
       const content = createNoteContentView(note);
       const scaleWrapper = document.createElement('div');
       scaleWrapper.className = 'thumb-scale-wrap';
       scaleWrapper.appendChild(content);
       
-      thumb.innerHTML = ""; // Clear existing content
+      thumb.innerHTML = "";
       thumb.appendChild(scaleWrapper);
 
       const title = clone.querySelector(".title");
       
       if (note.id === selectedNoteId) clone.classList.add("active");
       
-      // Append to DOM *first*
       els.notesList.appendChild(clone);
 
-      // Run sizing logic *after* element is in the DOM
       if (title) {
         title.textContent = note.partId || "Untitled";
         
-        // Use requestAnimationFrame to wait for browser to compute styles
         requestAnimationFrame(() => {
-          title.style.fontSize = '14px'; // 1. Reset
+          title.style.fontSize = '14px';
           let fontSize = 14;
-          
-          const containerWidth = title.clientWidth; // 2. Get container width
-          let textWidth = title.scrollWidth;       // 3. Get text width
+          const containerWidth = title.clientWidth;
+          let textWidth = title.scrollWidth;
 
-          // 4. Loop and shrink
           while (textWidth > containerWidth && fontSize > 8) {
             fontSize--;
             title.style.fontSize = `${fontSize}px`;
@@ -277,7 +275,6 @@ function renderViewer() {
   
   els.viewerTitle.textContent = note.partId || "Untitled";
 
-  // Use the new shared function
   const content = createNoteContentView(note);
   els.viewer.innerHTML = "";
   els.viewer.appendChild(content);
@@ -296,7 +293,7 @@ function renderEditor() {
   }
   
   els.partIdInput.value = note.partId;
-  els.notesInput.value = note.body; // Set the single textarea value
+  els.notesInput.value = note.body;
 
   els.imagesContainer.innerHTML = "";
   note.images.forEach((img) => {
@@ -346,6 +343,7 @@ function renderEditor() {
 }
 
 function renderAll() {
+  notes.sort((a, b) => a.partId.localeCompare(b.partId));
   ensureSelection();
   renderNotesList();
   renderViewer();
@@ -356,10 +354,10 @@ function renderAll() {
 async function createNote() {
   const newNote = {
     id: generateId("note"),
-    partId: "", // Changed from "Untitled"
+    partId: "",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    body: "", // Body is a single string
+    body: "",
     images: [],
   };
   notes.unshift(newNote);
@@ -372,8 +370,8 @@ async function createNote() {
 async function saveCurrentNote() {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
-  note.partId = els.partIdInput.value.trim() || "Untitled"; // Saves as "Untitled" if blank
-  note.body = els.notesInput.value; // Get value from the single textarea
+  note.partId = els.partIdInput.value.trim() || "Untitled";
+  note.body = els.notesInput.value;
   note.updatedAt = Date.now();
   await saveNotes();
   renderAll();
@@ -551,6 +549,15 @@ els.expandBtn.addEventListener("click", () => {
   } else {
     els.expandBtn.textContent = "Expand Note";
   }
+});
+
+// Print (NEW)
+els.printBtn.addEventListener("click", () => {
+  const { ipcRenderer } = require('electron');
+  // Send the partId to the main process for a better default filename
+  const note = notes.find(n => n.id === selectedNoteId);
+  const partId = note ? note.partId : 'Note';
+  ipcRenderer.send('print-to-pdf', partId);
 });
 
 // Simple cropper implementation (1:1)
@@ -836,17 +843,38 @@ els.cropperApplyBtn.addEventListener("click", async () => {
 els.cropperCloseBtn.addEventListener("click", closeCropper);
 els.cropperCancelBtn.addEventListener("click", closeCropper);
 
-// NEW Image Viewer Listeners
+// Image Viewer Listeners
 function closeImageViewer() {
   els.imageViewerModal.setAttribute("aria-hidden", "true");
   els.modalViewerImage.src = ""; // Clear image
+  // Reset zoom
+  imageViewerZoom = 1;
+  els.modalViewerImage.style.transform = 'scale(1)';
 }
 els.modalViewerCloseBtn.addEventListener("click", closeImageViewer);
-// Also close by clicking backdrop
 els.imageViewerModal.addEventListener("click", (e) => {
   if (e.target === els.imageViewerModal) {
     closeImageViewer();
   }
+});
+
+// Zoom on wheel in image viewer
+els.imageViewerModal.addEventListener("wheel", (e) => {
+  e.preventDefault(); // Stop page from scrolling
+  
+  // Determine zoom direction
+  const delta = e.deltaY > 0 ? -0.1 : 0.1; // - for wheel down, + for wheel up
+  
+  // Calculate new zoom level, clamped between 0.5x and 5x
+  imageViewerZoom = Math.max(0.5, Math.min(imageViewerZoom + delta, 5));
+  
+  // Apply the zoom
+  els.modalViewerImage.style.transform = `scale(${imageViewerZoom})`;
+}, { passive: false });
+
+// Search filter
+els.searchInput.addEventListener("input", () => {
+  renderAll(); // Re-render all to re-filter and re-select
 });
 
 
@@ -861,21 +889,5 @@ window.addEventListener("keydown", (e) => {
 // Bootstrap (NOW ASYNC)
 (async () => {
   notes = await loadNotes();
-  
-  if (notes.length === 0) {
-    // Seed with example note
-    notes.push({
-      id: generateId("note"),
-      partId: "KNX0400",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      body: '100% visual look for cable flexibility. AQL steps...\nIP columns D, E, F: Keyence 7020 program "KNX0400 High Precision Cable Side". Then, Keyence 7020, then M14 threads...',
-      images: [],
-    });
-    // Save the seed note
-    await saveNotes();
-  }
-  
-  selectedNoteId = notes[0]?.id || null;
   renderAll();
 })();

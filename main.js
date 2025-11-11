@@ -1,14 +1,13 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron'); // Added ipcMain, dialog
 const path = require('path');
+const fs = require('fs'); // Added fs
 
 function createWindow () {
   // Create the browser window.
   const win = new BrowserWindow({
-    width: 1400, // A good default size
+    width: 1400,
     height: 1000,
     webPreferences: {
-      // These two settings are crucial for your existing
-      // app.js code to work inside the Electron window
       nodeIntegration: true,
       contextIsolation: false
     }
@@ -38,4 +37,65 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+// --- NEW PDF PRINTING LOGIC ---
+ipcMain.on('print-to-pdf', (event, partId) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+
+  const safePartId = (partId || 'note').replace(/[^a-z0-9]/gi, '_');
+
+  dialog.showSaveDialog(win, {
+    title: 'Save Note as PDF',
+    defaultPath: `${safePartId}.pdf`,
+    filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
+  }).then(result => {
+    if (result.canceled || !result.filePath) {
+      return; // User cancelled
+    }
+
+    const pdfPath = result.filePath;
+    
+    // Options for PDF generation
+    const options = {
+      marginsType: 1, // 0 = default, 1 = none, 2 = min
+      pageSize: 'Letter',
+      printBackground: true,
+      landscape: false
+    };
+
+    // Hide the floating "Expand Note" button before printing
+    win.webContents.executeJavaScript(`
+      document.getElementById('expandBtn').style.visibility = 'hidden';
+      document.getElementById('printBtn').style.visibility = 'hidden';
+    `).then(() => {
+      // Run the PDF generation
+      win.webContents.printToPDF(options).then(data => {
+        fs.writeFile(pdfPath, data, (error) => {
+          if (error) {
+            console.error('Failed to write PDF:', error);
+            dialog.showErrorBox('Save PDF Error', 'Failed to save the PDF file.');
+          }
+          
+          // Show the buttons again after it's done
+          win.webContents.executeJavaScript(`
+            document.getElementById('expandBtn').style.visibility = 'visible';
+            document.getElementById('printBtn').style.visibility = 'visible';
+          `);
+        });
+      }).catch(error => {
+        console.error('Failed to print PDF:', error);
+        dialog.showErrorBox('Print PDF Error', 'Failed to generate the PDF.');
+        // Show the buttons again even if it fails
+        win.webContents.executeJavaScript(`
+          document.getElementById('expandBtn').style.visibility = 'visible';
+          document.getElementById('printBtn').style.visibility = 'visible';
+        `);
+      });
+    });
+
+  }).catch(err => {
+    console.error('Save dialog error:', err);
+  });
 });

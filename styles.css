@@ -29,9 +29,6 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .app-header h1 { margin: 0; font-size: 34px; letter-spacing: 0.5px; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
-.import-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; }
-.import-label input { display: none; }
 
 .app-main {
   display: grid;
@@ -67,6 +64,19 @@ body {
   justify-content: center;
 }
 .panel-title { flex: 1; text-align: center; color: var(--muted); font-weight: 600; }
+
+#searchInput {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+#searchInput::placeholder {
+  color: var(--muted);
+}
 
 button {
   appearance: none;
@@ -109,7 +119,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 0;
 }
 
-/* This wrapper holds the scaled-down content */
 .thumb-scale-wrap {
   width: var(--thumb-content-width);
   height: calc(var(--thumb-content-width) * 11 / 8.5);
@@ -123,7 +132,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--panel-2);
 }
 
-/* Override styles for content inside the thumbnail */
 .thumb-scale-wrap .note-body {
   background: var(--bg);
   font-size: 16px;
@@ -173,7 +181,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-top: none;
 }
 
-/* New overlay for the Part ID */
 .thumb-overlay {
   position: absolute;
   inset: 0;
@@ -193,8 +200,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   text-align: center;
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   max-width: 100%;
-  white-space: nowrap; /* Don't wrap */
-  overflow: hidden; /* Hide overflow */
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 
@@ -238,6 +245,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   top: 50%;
   transform: translateY(-50%);
 }
+.viewer-header #printBtn { /* NEW */
+  position: absolute;
+  left: 120px; /* Position next to expand button */
+  top: 50%;
+  transform: translateY(-50%);
+}
 .viewer-title {
   flex: 1;
   text-align: center;
@@ -245,7 +258,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--text);
   font-size: 25px;
 }
-.viewer-pagination { display: flex; align-items: center; gap: 8px; }
 
 .editor { padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
 .field { display: grid; gap: 6px; }
@@ -255,7 +267,6 @@ input[type="text"], textarea { width: 100%; padding: 8px 10px; background: var(-
 .images-toolbar { display: flex; gap: 8px; align-items: center; }
 .muted { color: var(--muted); }
 
-/* This container now scrolls horizontally */
 .images-container {
   display: flex;
   overflow-x: auto;
@@ -291,16 +302,20 @@ input[type="text"], textarea { width: 100%; padding: 8px 10px; background: var(-
 
 
 /* --- NEW Image Viewer Styles --- */
+#imageViewerModal .modal-body {
+  overflow: hidden;
+}
 #modalViewerImage {
   display: block;
   width: 100%;
-  max-height: 80vh; /* Don't be taller than the viewport */
-  object-fit: contain; /* Don't stretch */
-  border-radius: 8px; /* Match panel style */
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 8px;
+  transform-origin: center center;
+  transition: transform 0.1s ease-out;
 }
-/* THIS IS THE MODIFIED RULE */
 #imageViewerModal .modal-footer {
-  justify-content: center; /* Center the close button */
+  justify-content: center;
 }
 #modalViewerCloseBtn {
   min-width: 120px;
@@ -399,5 +414,69 @@ textarea::-webkit-scrollbar-track {
   }
   .app-main.view-expanded .panel-right {
     display: none;
+  }
+}
+
+/* --- NEW PRINT STYLES --- */
+@media print {
+  /* Hide all UI elements except the viewer */
+  body > *:not(.app-main),
+  .app-main > *:not(.panel-center),
+  .panel-center > *:not(.viewer),
+  .viewer-header {
+    display: none;
+  }
+
+  /* Reset layouts for printing */
+  body {
+    background: #fff; /* White paper background */
+    color: #000; /* Black text */
+  }
+
+  .app-main, .panel-center {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    box-shadow: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .viewer {
+    display: block;
+    overflow: visible;
+    padding: 1in; /* Standard 1 inch margin */
+    font-size: 12pt;
+    color: #000;
+  }
+
+  .viewer .note-body {
+    background: #f0f0f0; /* Light gray box for notes */
+    border: 1px solid #ccc;
+    color: #000;
+    font-size: 12pt;
+    white-space: pre-wrap;
+  }
+
+  .viewer .images {
+    grid-template-columns: repeat(2, 1fr); /* 2 images per row on paper */
+    page-break-inside: avoid;
+  }
+
+  .viewer .image-card {
+    page-break-inside: avoid;
+  }
+
+  .viewer .image-card .image-frame {
+    background: #fff;
+    border: 1px solid #ccc;
+  }
+
+  .viewer .image-card .caption {
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    color: #000;
   }
 }
