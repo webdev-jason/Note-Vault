@@ -132,6 +132,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--panel-2);
 }
 
+/* This new style is hidden in the app, but visible for print */
+.thumb-scale-wrap .print-part-id,
+.viewer .print-part-id {
+  display: none;
+}
+
 .thumb-scale-wrap .note-body {
   background: var(--bg);
   font-size: 16px;
@@ -379,9 +385,9 @@ textarea::-webkit-scrollbar-track {
   grid-template-columns: 1fr;
 }
 .app-main.view-expanded .panel-center {
-   width: 100%;
-   max-width: 1400px; /* Constrain width in expanded view */
-   justify-self: center; /* Center the panel in the grid area */
+  width: 100%;
+  max-width: 1400px; /* Constrain width in expanded view */
+  justify-self: center; /* Center the panel in the grid area */
 }
 .app-main.view-expanded .viewer {
   font-size: 125%; /* Increase font size in expanded view */
@@ -447,26 +453,45 @@ textarea::-webkit-scrollbar-track {
   .viewer {
     display: block;
     overflow: visible;
-    padding: 1in; /* Standard 1 inch margin */
+    padding: 0.5in; /* Standard 0.5 inch margin */
     font-size: 12pt;
+    color: #000;
+    gap: 0; /* Remove app gap for print */
+  }
+
+  /* --- Style for the Part ID --- */
+  .viewer .print-part-id {
+    display: block; /* Make it visible for print */
+    text-align: center;
+    font-size: 24pt; /* 2x the note body 12pt */
+    font-weight: bold;
+    margin-bottom: 24px;
     color: #000;
   }
 
+  /* --- THIS IS THE FIX --- */
   .viewer .note-body {
-    background: #f0f0f0; /* Light gray box for notes */
-    border: 1px solid #ccc;
+    background: #fff; 
+    border: none; /* Was 1px solid #ccc */
     color: #000;
     font-size: 12pt;
     white-space: pre-wrap;
+    border-radius: 8px; 
+    padding: 12px;
   }
+  /* --- END OF FIX --- */
 
   .viewer .images {
-    grid-template-columns: repeat(2, 1fr); /* 2 images per row on paper */
-    page-break-inside: avoid;
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 16px; 
+    margin-top: 16px; 
   }
 
   .viewer .image-card {
-    page-break-inside: avoid;
+    flex: 1 1 30%; 
+    max-width: 31%; 
+    page-break-inside: avoid; /* Keep individual cards from splitting */
   }
 
   .viewer .image-card .image-frame {
@@ -475,8 +500,10 @@ textarea::-webkit-scrollbar-track {
   }
 
   .viewer .image-card .caption {
-    background: #f0f0f0;
+    background: #fff; 
     border: 1px solid #ccc;
     color: #000;
+    border-radius: 8px;
+    padding: 8px;
   }
 }

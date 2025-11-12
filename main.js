@@ -61,7 +61,7 @@ ipcMain.on('print-to-pdf', (event, partId) => {
     const options = {
       marginsType: 1, // 0 = default, 1 = none, 2 = min
       pageSize: 'Letter',
-      printBackground: true,
+      printBackground: false, // This makes the background white
       landscape: false
     };
 
@@ -70,29 +70,34 @@ ipcMain.on('print-to-pdf', (event, partId) => {
       document.getElementById('expandBtn').style.visibility = 'hidden';
       document.getElementById('printBtn').style.visibility = 'hidden';
     `).then(() => {
-      // Run the PDF generation
-      win.webContents.printToPDF(options).then(data => {
-        fs.writeFile(pdfPath, data, (error) => {
-          if (error) {
-            console.error('Failed to write PDF:', error);
-            dialog.showErrorBox('Save PDF Error', 'Failed to save the PDF file.');
-          }
-          
-          // Show the buttons again after it's done
+      
+      // *** THIS IS THE FIX: Wait 1.5s for images to render ***
+      setTimeout(() => {
+        // Run the PDF generation
+        win.webContents.printToPDF(options).then(data => {
+          fs.writeFile(pdfPath, data, (error) => {
+            if (error) {
+              console.error('Failed to write PDF:', error);
+              dialog.showErrorBox('Save PDF Error', 'Failed to save the PDF file.');
+            }
+            
+            // Show the buttons again after it's done
+            win.webContents.executeJavaScript(`
+              document.getElementById('expandBtn').style.visibility = 'visible';
+              document.getElementById('printBtn').style.visibility = 'visible';
+            `);
+          });
+        }).catch(error => {
+          console.error('Failed to print PDF:', error);
+          dialog.showErrorBox('Print PDF Error', 'Failed to generate the PDF.');
+          // Show the buttons again even if it fails
           win.webContents.executeJavaScript(`
             document.getElementById('expandBtn').style.visibility = 'visible';
             document.getElementById('printBtn').style.visibility = 'visible';
           `);
         });
-      }).catch(error => {
-        console.error('Failed to print PDF:', error);
-        dialog.showErrorBox('Print PDF Error', 'Failed to generate the PDF.');
-        // Show the buttons again even if it fails
-        win.webContents.executeJavaScript(`
-          document.getElementById('expandBtn').style.visibility = 'visible';
-          document.getElementById('printBtn').style.visibility = 'visible';
-        `);
-      });
+      }, 1500); // *** CHANGED: Was 500, now 1500 ***
+
     });
 
   }).catch(err => {

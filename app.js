@@ -175,6 +175,12 @@ function ensureSelection() {
 function createNoteContentView(note) {
   const frag = document.createDocumentFragment();
 
+  // *** NEW: Add the Part ID for printing ***
+  const partId = document.createElement("div");
+  partId.className = "print-part-id"; // We will style this in CSS
+  partId.textContent = note.partId || "Untitled";
+  frag.appendChild(partId);
+
   const body = document.createElement("div");
   body.className = "note-body";
   body.textContent = note.body || "";
