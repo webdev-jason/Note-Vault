@@ -1,9 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron'); // Added ipcMain, dialog
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const fs = require('fs'); // Added fs
+const fs = require('fs');
 
 function createWindow () {
-  // Create the browser window.
   const win = new BrowserWindow({
     width: 1400,
     height: 1000,
@@ -13,18 +12,12 @@ function createWindow () {
     }
   });
 
-  // and load the index.html of the app.
   win.loadFile('index.html');
-
-  // You can uncomment this line to open the Chrome DevTools
-  // win.webContents.openDevTools();
+  // win.webContents.openDevTools(); 
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
 app.whenReady().then(createWindow);
 
-// Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
@@ -32,14 +25,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  // On macOS it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
 
-// --- NEW PDF PRINTING LOGIC ---
+// --- PDF PRINTING LOGIC ---
 ipcMain.on('print-to-pdf', (event, partId) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
@@ -52,28 +43,24 @@ ipcMain.on('print-to-pdf', (event, partId) => {
     filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
   }).then(result => {
     if (result.canceled || !result.filePath) {
-      return; // User cancelled
+      return; 
     }
 
     const pdfPath = result.filePath;
     
-    // Options for PDF generation
     const options = {
-      marginsType: 1, // 0 = default, 1 = none, 2 = min
+      marginsType: 1, 
       pageSize: 'Letter',
-      printBackground: false, // This makes the background white
+      printBackground: false, 
       landscape: false
     };
 
-    // Hide the floating "Expand Note" button before printing
     win.webContents.executeJavaScript(`
       document.getElementById('expandBtn').style.visibility = 'hidden';
       document.getElementById('printBtn').style.visibility = 'hidden';
     `).then(() => {
       
-      // *** THIS IS THE FIX: Wait 1.5s for images to render ***
       setTimeout(() => {
-        // Run the PDF generation
         win.webContents.printToPDF(options).then(data => {
           fs.writeFile(pdfPath, data, (error) => {
             if (error) {
@@ -81,7 +68,6 @@ ipcMain.on('print-to-pdf', (event, partId) => {
               dialog.showErrorBox('Save PDF Error', 'Failed to save the PDF file.');
             }
             
-            // Show the buttons again after it's done
             win.webContents.executeJavaScript(`
               document.getElementById('expandBtn').style.visibility = 'visible';
               document.getElementById('printBtn').style.visibility = 'visible';
@@ -90,17 +76,73 @@ ipcMain.on('print-to-pdf', (event, partId) => {
         }).catch(error => {
           console.error('Failed to print PDF:', error);
           dialog.showErrorBox('Print PDF Error', 'Failed to generate the PDF.');
-          // Show the buttons again even if it fails
           win.webContents.executeJavaScript(`
             document.getElementById('expandBtn').style.visibility = 'visible';
             document.getElementById('printBtn').style.visibility = 'visible';
           `);
         });
-      }, 1500); // *** CHANGED: Was 500, now 1500 ***
+      }, 1500); 
 
     });
 
   }).catch(err => {
     console.error('Save dialog error:', err);
+  });
+});
+
+// --- EXPORT/IMPORT LOGIC ---
+
+// 1. Handle Export Profile
+ipcMain.on('export-data', (event, notesData) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+
+  dialog.showSaveDialog(win, {
+    title: 'Export Profile',
+    defaultPath: 'note-vault-profile.json',
+    filters: [{ name: 'JSON Files', extensions: ['json'] }]
+  }).then(result => {
+    if (result.canceled || !result.filePath) {
+      return;
+    }
+    
+    const jsonContent = JSON.stringify(notesData, null, 2); 
+    
+    fs.writeFile(result.filePath, jsonContent, (error) => {
+      if (error) {
+        dialog.showErrorBox('Export Error', 'Failed to save profile file.');
+      } else {
+        dialog.showMessageBox(win, {
+          title: 'Export Successful',
+          // CHANGED: Updated message per your request
+          message: 'Your profile has been exported successfully.'
+        });
+      }
+    });
+  });
+});
+
+// 2. Handle Import Profile
+ipcMain.on('import-data', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+
+  dialog.showOpenDialog(win, {
+    title: 'Import Profile',
+    filters: [{ name: 'JSON Files', extensions: ['json'] }],
+    properties: ['openFile']
+  }).then(result => {
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return;
+    }
+
+    const filePath = result.filePaths[0];
+    fs.readFile(filePath, 'utf-8', (error, data) => {
+      if (error) {
+        dialog.showErrorBox('Import Error', 'Failed to read profile file.');
+        return;
+      }
+      event.sender.send('data-loaded', data);
+    });
   });
 });

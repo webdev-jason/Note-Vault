@@ -2,8 +2,8 @@
 const DB_NAME = 'NoteVaultDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'notes_store';
-const KEY = 'all_notes'; // We will store the entire notes array as one object
-const LEGACY_STORAGE_KEY = "notevault.v1.notes"; // For migration
+let CURRENT_PROFILE_KEY = 'default_notes'; 
+const LEGACY_STORAGE_KEY = "notevault.v1.notes"; 
 
 const db = {
   _db: null,
@@ -33,36 +33,57 @@ const db = {
     });
   },
 
-  async get() {
+  async get(key) {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readonly');
       const store = transaction.objectStore(STORE_NAME);
-      const request = store.get(KEY);
+      const request = store.get(key);
 
       request.onerror = (e) => reject(new Error('Could not get notes.'));
       request.onsuccess = (e) => {
-        resolve(e.target.result); // Returns undefined if not found
+        resolve(e.target.result); 
       };
     });
   },
 
-  async set(data) {
+  async set(key, data) {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
-      const request = store.put(data, KEY);
+      const request = store.put(data, key);
 
       request.onerror = (e) => reject(new Error('Could not save notes.'));
       request.onsuccess = (e) => resolve(e.target.result);
     });
+  },
+
+  async getAllKeys() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAllKeys();
+
+      request.onerror = (e) => reject(new Error('Could not get keys.'));
+      request.onsuccess = (e) => resolve(e.target.result);
+    });
+  },
+
+  async deleteKey(key) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(key);
+
+      request.onerror = (e) => reject(new Error('Could not delete profile.'));
+      request.onsuccess = (e) => resolve();
+    });
   }
 };
 // --- END DB HELPER ---
-
-
-/** @typedef {{ id:string, partId:string, createdAt:number, updatedAt:number, body:string, images:Array<{ id:string, dataUrl:string, caption:string, originalDataUrl?:string }> }} Note */
 
 /** @type {Note[]} */
 let notes = [];
@@ -87,7 +108,32 @@ const els = {
   imageCaptionInput: document.getElementById("imageCaptionInput"),
   noteListItemTemplate: document.getElementById("noteListItemTemplate"),
   expandBtn: document.getElementById("expandBtn"),
-  printBtn: document.getElementById("printBtn"), // NEW
+  printBtn: document.getElementById("printBtn"), 
+  // Profile Buttons
+  exportDataBtn: document.getElementById("exportDataBtn"),
+  importDataBtn: document.getElementById("importDataBtn"),
+  currentProfileBtn: document.getElementById("currentProfileBtn"),
+  // Profile Modal
+  profileModal: document.getElementById("profileModal"),
+  profileCloseBtn: document.getElementById("profileCloseBtn"),
+  profileList: document.getElementById("profileList"),
+  newProfileInput: document.getElementById("newProfileInput"),
+  createProfileBtn: document.getElementById("createProfileBtn"),
+  
+  // NEW: App Alert Modal
+  appAlertModal: document.getElementById("appAlertModal"),
+  appAlertTitle: document.getElementById("appAlertTitle"),
+  appAlertMessage: document.getElementById("appAlertMessage"),
+  appAlertCloseBtn: document.getElementById("appAlertCloseBtn"),
+  appAlertOkBtn: document.getElementById("appAlertOkBtn"),
+
+  // NEW: App Confirm Modal
+  appConfirmModal: document.getElementById("appConfirmModal"),
+  appConfirmTitle: document.getElementById("appConfirmTitle"),
+  appConfirmMessage: document.getElementById("appConfirmMessage"),
+  appConfirmCancelBtn: document.getElementById("appConfirmCancelBtn"),
+  appConfirmOkBtn: document.getElementById("appConfirmOkBtn"),
+  
   // Cropper
   cropperModal: document.getElementById("cropperModal"),
   cropperImage: document.getElementById("cropperImage"),
@@ -102,57 +148,185 @@ const els = {
   modalViewerCloseBtn: document.getElementById("modalViewerCloseBtn"),
 };
 
-async function loadNotes() {
-  let parsed = [];
-  try {
-    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (raw) {
-      // Data found in old localStorage, start migration
-      console.log("Old localStorage data found. Attempting migration...");
-      parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) parsed = [];
+// --- INTERNAL MODAL SYSTEM ---
+let confirmCallback = null;
 
-      // --- MIGRATION LOGIC to flatten 'pages' ---
-      const migrated = parsed.map(note => {
-        if (note.pages) {
-          console.log("Migrating old note:", note.partId);
-          const newNote = { ...note };
-          newNote.body = note.pages.map(p => p.body).join('\n\n');
-          newNote.images = note.pages.flatMap(p => p.images);
-          delete newNote.pages;
-          return newNote;
-        }
-        return note;
-      });
-      
-      console.log("Migration complete. Saving to IndexedDB.");
-      await db.set(migrated); // Save migrated data to new DB
-      localStorage.removeItem(LEGACY_STORAGE_KEY); // Clean up old data
-      return migrated;
-    }
-  } catch (e) {
-    console.error("Error migrating from localStorage:", e);
+function showAppAlert(title, message) {
+  els.appAlertTitle.textContent = title;
+  els.appAlertMessage.textContent = message;
+  els.appAlertModal.setAttribute("aria-hidden", "false");
+  els.appAlertOkBtn.focus();
+}
+
+function closeAppAlert() {
+  els.appAlertModal.setAttribute("aria-hidden", "true");
+}
+
+function showAppConfirm(title, message, onConfirm, danger = false) {
+  confirmCallback = onConfirm;
+  els.appConfirmTitle.textContent = title;
+  els.appConfirmMessage.textContent = message;
+  
+  if (danger) {
+    els.appConfirmOkBtn.classList.add("danger");
+    els.appConfirmOkBtn.classList.remove("primary");
+  } else {
+    els.appConfirmOkBtn.classList.add("primary");
+    els.appConfirmOkBtn.classList.remove("danger");
   }
+  
+  els.appConfirmModal.setAttribute("aria-hidden", "false");
+  els.appConfirmCancelBtn.focus();
+}
 
-  // No localStorage data, try to load from IndexedDB
-  const notesFromDB = await db.get();
+function closeAppConfirm() {
+  confirmCallback = null;
+  els.appConfirmModal.setAttribute("aria-hidden", "true");
+}
+
+els.appAlertCloseBtn.addEventListener("click", closeAppAlert);
+els.appAlertOkBtn.addEventListener("click", closeAppAlert);
+els.appConfirmCancelBtn.addEventListener("click", closeAppConfirm);
+els.appConfirmOkBtn.addEventListener("click", () => {
+  if (confirmCallback) confirmCallback();
+  closeAppConfirm();
+});
+// --- END MODAL SYSTEM ---
+
+
+// --- INITIAL LOAD ---
+async function loadNotes() {
+  const notesFromDB = await db.get(CURRENT_PROFILE_KEY);
   return Array.isArray(notesFromDB) ? notesFromDB : [];
 }
 
-
 async function saveNotes() {
   try {
-    await db.set(notes);
+    await db.set(CURRENT_PROFILE_KEY, notes);
   } catch (e) {
     console.error("Fatal error saving to IndexedDB:", e);
-    alert("FATAL ERROR: Could not save notes to database. " + e.message);
+    // Use our new alert
+    showAppAlert("Database Error", "FATAL ERROR: Could not save notes. " + e.message);
   }
 }
 
+// --- PROFILE MANAGEMENT LOGIC ---
+
+function updateProfileUI() {
+  els.currentProfileBtn.textContent = `Profile: ${CURRENT_PROFILE_KEY}`;
+}
+
+async function switchProfile(newKey, close = true) {
+  if (newKey === CURRENT_PROFILE_KEY) {
+     if (!close) renderProfileList();
+     return;
+  }
+
+  await saveNotes(); 
+
+  CURRENT_PROFILE_KEY = newKey;
+  localStorage.setItem('last_profile', newKey);
+
+  selectedNoteId = null; 
+  notes = await loadNotes(); 
+  
+  renderAll();
+  updateProfileUI();
+  
+  if (close) {
+    closeProfileModal();
+  } else {
+    renderProfileList();
+    els.newProfileInput.value = "";
+    els.newProfileInput.focus();
+  }
+}
+
+// Delete Profile using new custom modal
+function deleteProfile(keyToDelete) {
+  if (keyToDelete === CURRENT_PROFILE_KEY) {
+    showAppAlert("Cannot Delete", "You cannot delete the active profile. Switch to another one first.");
+    return;
+  }
+  
+  showAppConfirm(
+    "Delete Profile?", 
+    `Are you sure you want to delete profile "${keyToDelete}"? This cannot be undone.`, 
+    async () => {
+      await db.deleteKey(keyToDelete);
+      await renderProfileList(); 
+      // Fix focus stealing
+      setTimeout(() => {
+        if (els.newProfileInput) els.newProfileInput.focus();
+      }, 50);
+    },
+    true // Danger style
+  );
+}
+
+async function createProfile() {
+  const name = els.newProfileInput.value.trim();
+  if (!name) return;
+
+  const safeName = name.replace(/[^a-z0-9-_ ]/gi, "_");
+
+  const keys = await db.getAllKeys();
+  if (keys.includes(safeName)) {
+    showAppAlert("Error", "Profile name already exists.");
+    return;
+  }
+
+  await db.set(safeName, []);
+  await switchProfile(safeName, false);
+}
+
+async function renderProfileList() {
+  els.profileList.innerHTML = "";
+  const keys = await db.getAllKeys();
+
+  keys.forEach(key => {
+    if (key === 'default_notes' || key === 'all_notes') {
+      return; 
+    }
+
+    const item = document.createElement('div');
+    item.className = 'profile-list-item';
+    
+    const switchBtn = document.createElement('button');
+    switchBtn.className = `profile-switch-btn ${key === CURRENT_PROFILE_KEY ? 'active' : ''}`;
+    switchBtn.textContent = key;
+    switchBtn.onclick = () => switchProfile(key, false);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'profile-delete-btn danger';
+    delBtn.textContent = 'Delete';
+    delBtn.onclick = () => deleteProfile(key);
+
+    if (keys.length === 1) delBtn.disabled = true;
+
+    item.appendChild(switchBtn);
+    item.appendChild(delBtn);
+    els.profileList.appendChild(item);
+  });
+}
+
+function openProfileModal() {
+  renderProfileList();
+  els.profileModal.setAttribute("aria-hidden", "false");
+}
+function closeProfileModal() {
+  els.profileModal.setAttribute("aria-hidden", "true");
+}
+
+els.currentProfileBtn.addEventListener("click", openProfileModal);
+els.profileCloseBtn.addEventListener("click", closeProfileModal);
+els.createProfileBtn.addEventListener("click", createProfile);
+
+
+// --- STANDARD APP LOGIC ---
+
 function generateId(prefix) {
-  return `${prefix}_${Math.random()
-    .toString(36)
-    .slice(2, 9)}_${Date.now().toString(36)}`;
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}`;
 }
 
 function ensureSelection() {
@@ -167,17 +341,11 @@ function ensureSelection() {
   }
 }
 
-/**
- * Creates the DOM fragment for a note's content (body + images)
- * @param {Note} note
- * @returns {DocumentFragment}
- */
 function createNoteContentView(note) {
   const frag = document.createDocumentFragment();
 
-  // *** NEW: Add the Part ID for printing ***
   const partId = document.createElement("div");
-  partId.className = "print-part-id"; // We will style this in CSS
+  partId.className = "print-part-id"; 
   partId.textContent = note.partId || "Untitled";
   frag.appendChild(partId);
 
@@ -215,10 +383,8 @@ function createNoteContentView(note) {
   return frag;
 }
 
-// Rendering
 function renderNotesList() {
   const filterText = els.searchInput.value.toLowerCase().trim();
-
   els.notesList.innerHTML = "";
   notes
     .filter(note => {
@@ -226,34 +392,24 @@ function renderNotesList() {
       return note.partId.toLowerCase().includes(filterText);
     })
     .forEach((note) => {
-      const clone = /** @type {HTMLButtonElement} */ (
-        els.noteListItemTemplate.content.firstElementChild.cloneNode(true)
-      );
+      const clone = els.noteListItemTemplate.content.firstElementChild.cloneNode(true);
       const thumb = clone.querySelector(".thumb");
-      
       const content = createNoteContentView(note);
       const scaleWrapper = document.createElement('div');
       scaleWrapper.className = 'thumb-scale-wrap';
       scaleWrapper.appendChild(content);
-      
       thumb.innerHTML = "";
       thumb.appendChild(scaleWrapper);
-
       const title = clone.querySelector(".title");
-      
       if (note.id === selectedNoteId) clone.classList.add("active");
-      
       els.notesList.appendChild(clone);
-
       if (title) {
         title.textContent = note.partId || "Untitled";
-        
         requestAnimationFrame(() => {
           title.style.fontSize = '14px';
           let fontSize = 14;
           const containerWidth = title.clientWidth;
           let textWidth = title.scrollWidth;
-
           while (textWidth > containerWidth && fontSize > 8) {
             fontSize--;
             title.style.fontSize = `${fontSize}px`;
@@ -261,7 +417,6 @@ function renderNotesList() {
           }
         });
       }
-
       clone.addEventListener("click", () => {
         selectedNoteId = note.id;
         selectedImageId = null;
@@ -274,13 +429,10 @@ function renderViewer() {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) {
     els.viewerTitle.textContent = "—";
-    els.viewer.innerHTML =
-      '<div class="muted">Select or create a note to view.</div>';
+    els.viewer.innerHTML = '<div class="muted">Select or create a note to view.</div>';
     return;
   }
-  
   els.viewerTitle.textContent = note.partId || "Untitled";
-
   const content = createNoteContentView(note);
   els.viewer.innerHTML = "";
   els.viewer.appendChild(content);
@@ -297,10 +449,8 @@ function renderEditor() {
     els.imagesContainer.innerHTML = "";
     return;
   }
-  
   els.partIdInput.value = note.partId;
   els.notesInput.value = note.body;
-
   els.imagesContainer.innerHTML = "";
   note.images.forEach((img) => {
     const card = document.createElement("div");
@@ -325,7 +475,6 @@ function renderEditor() {
     card.appendChild(image);
     card.appendChild(actions);
     card.appendChild(caption);
-
     card.addEventListener("click", () => {
       selectedImageId = img.id;
       els.imageCaptionInput.value = img.caption || "";
@@ -343,7 +492,6 @@ function renderEditor() {
     });
     els.imagesContainer.appendChild(card);
   });
-
   const selectedImg = note.images.find((i) => i.id === selectedImageId);
   els.imageCaptionInput.value = selectedImg ? selectedImg.caption || "" : "";
 }
@@ -354,9 +502,9 @@ function renderAll() {
   renderNotesList();
   renderViewer();
   renderEditor();
+  updateProfileUI();
 }
 
-// Mutations (NOW ASYNC)
 async function createNote() {
   const newNote = {
     id: generateId("note"),
@@ -470,7 +618,6 @@ async function addImagesFromFiles(fileList) {
   els.imageInput.value = "";
 }
 
-// Utilities to compress image data URLs
 function loadImageFromDataUrl(dataUrl) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -523,316 +670,86 @@ async function removeImage(imageId) {
   renderAll();
 }
 
-// Note actions (now async)
 els.addNoteBtn.addEventListener("click", createNote);
 els.saveNoteBtn.addEventListener("click", saveCurrentNote);
 els.deleteNoteBtn.addEventListener("click", deleteCurrentNote);
-
-// Image upload
 els.addImageBtn.addEventListener("click", () => els.imageInput.click());
-els.imageInput.addEventListener("change", (e) =>
-  addImagesFromFiles(e.target.files)
-);
-
-// Caption input (now async)
-els.imageCaptionInput.addEventListener("input", (e) =>
-  updateSelectedImageCaption(e.target.value)
-);
-
-// Horizontal scroll for image editor
+els.imageInput.addEventListener("change", (e) => addImagesFromFiles(e.target.files));
+els.imageCaptionInput.addEventListener("input", (e) => updateSelectedImageCaption(e.target.value));
 els.imagesContainer.addEventListener("wheel", (e) => {
   if (e.deltaY !== 0) {
     e.preventDefault();
     els.imagesContainer.scrollLeft += e.deltaY;
   }
 }, { passive: false });
-
-// Expand (toggle full screen center)
 els.expandBtn.addEventListener("click", () => {
   const isExpanded = els.appMain.classList.toggle("view-expanded");
-  if (isExpanded) {
-    els.expandBtn.textContent = "Collapse Note";
-  } else {
-    els.expandBtn.textContent = "Expand Note";
-  }
+  els.expandBtn.textContent = isExpanded ? "Collapse Note" : "Expand Note";
 });
-
-// Print (NEW)
 els.printBtn.addEventListener("click", () => {
   const { ipcRenderer } = require('electron');
-  // Send the partId to the main process for a better default filename
   const note = notes.find(n => n.id === selectedNoteId);
   const partId = note ? note.partId : 'Note';
   ipcRenderer.send('print-to-pdf', partId);
 });
 
-// Simple cropper implementation (1:1)
-let cropperState = {
-  imageId: null,
-  naturalWidth: 0,
-  naturalHeight: 0,
-  imgRect: null,
-  crop: { x: 0, y: 0, size: 100 },
-  zoom: 1,
-};
-
-async function openCropper(imgObj) {
-  if (!imgObj.originalDataUrl) {
-    imgObj.originalDataUrl = imgObj.dataUrl;
-    await saveNotes();
-  }
-  els.cropperImage.src = imgObj.originalDataUrl || imgObj.dataUrl;
-  cropperState.imageId = imgObj.id;
-  els.cropperModal.setAttribute("aria-hidden", "false");
-  selectedImageId = imgObj.id;
-  setZoom(1);
-  
-  requestAnimationFrame(() => {
-    const rect = getDisplayedImageRect();
-    cropperState.imgRect = rect;
-    cropperState.naturalWidth = els.cropperImage.naturalWidth;
-    cropperState.naturalHeight = els.cropperImage.naturalHeight;
-    const size = Math.min(rect.width, rect.height) * 0.6;
-    const x = rect.left + (rect.width - size) / 2;
-    const y = rect.top + (rect.height - size) / 2;
-    positionCropBox(x, y, size);
-    syncCropControls();
-  });
-}
-
-function closeCropper() {
-  els.cropperModal.setAttribute("aria-hidden", "true");
-}
-
-function positionCropBox(viewX, viewY, viewSize) {
-  const container = els.cropperStage.getBoundingClientRect();
-  const imageRect = getDisplayedImageRect();
-  const cb = els.cropBox;
-  const maxSize = Math.min(imageRect.width, imageRect.height);
-  const size = Math.max(20, Math.min(viewSize, maxSize));
-  const minLeft = imageRect.left;
-  const minTop = imageRect.top;
-  const maxLeft = imageRect.right - size;
-  const maxTop = imageRect.bottom - size;
-  const x = Math.max(minLeft, Math.min(viewX, maxLeft));
-  const y = Math.max(minTop, Math.min(viewY, maxTop));
-  cb.style.left = `${x - container.left}px`;
-  cb.style.top = `${y - container.top}px`;
-  cb.style.width = `${size}px`;
-  cb.style.height = `${size}px`;
-  cropperState.crop = { x, y, size };
-  syncCropControls();
-}
-
-// Drag/resize crop box
-let dragging = false;
-let dragOffset = { x: 0, y: 0 };
-els.cropBox.addEventListener("pointerdown", (e) => {
-  dragging = true;
-  const rect = els.cropBox.getBoundingClientRect();
-  dragOffset.x = e.clientX - rect.left;
-  dragOffset.y = e.clientY - rect.top;
-  els.cropBox.setPointerCapture(e.pointerId);
-});
-window.addEventListener("pointermove", (e) => {
-  if (!dragging) return;
-  const stage = els.cropperImage.getBoundingClientRect();
-  const size = els.cropBox.getBoundingClientRect().width;
-  positionCropBox(e.clientX - dragOffset.x, e.clientY - dragOffset.y, size);
-});
-window.addEventListener("pointerup", (e) => {
-  dragging = false;
-});
-els.cropBox.addEventListener(
-  "wheel",
-  (e) => {
-    e.preventDefault();
-    const delta = Math.sign(e.deltaY);
-    const rect = els.cropBox.getBoundingClientRect();
-    const newSize = rect.width * (1 - 0.08 * delta);
-    positionCropBox(rect.left, rect.top, newSize);
-  },
-  { passive: false }
-);
-
-els.cropperImage.addEventListener("click", (e) => {
-  const stage = getDisplayedImageRect();
-  const cbRect = els.cropBox.getBoundingClientRect();
-  const size = cbRect.width;
-  const targetX = e.clientX - size / 2;
-  const targetY = e.clientY - size / 2;
-  positionCropBox(targetX, targetY, size);
+// --- DATA MANAGEMENT LISTENERS ---
+els.exportDataBtn.addEventListener("click", () => {
+  const { ipcRenderer } = require('electron');
+  ipcRenderer.send('export-data', notes);
 });
 
-els.cropBox.addEventListener("keydown", (e) => {
-  const rect = els.cropBox.getBoundingClientRect();
-  const step = e.shiftKey ? 10 : 2;
-  if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    positionCropBox(rect.left - step, rect.top, rect.width);
-  }
-  if (e.key === "ArrowRight") {
-    e.preventDefault();
-    positionCropBox(rect.left + step, rect.top, rect.width);
-  }
-  if (e.key === "ArrowUp") {
-    e.preventDefault();
-    positionCropBox(rect.left, rect.top - step, rect.width);
-  }
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    positionCropBox(rect.left, rect.top + step, rect.width);
-  }
-  if (e.key === "-" || e.key === "_") {
-    e.preventDefault();
-    positionCropBox(rect.left, rect.top, rect.width * 0.92);
-  }
-  if (e.key === "=" || e.key === "+") {
-    e.preventDefault();
-    positionCropBox(rect.left, rect.top, rect.width * 1.08);
+els.importDataBtn.addEventListener("click", () => {
+  const { ipcRenderer } = require('electron');
+  ipcRenderer.send('import-data');
+});
+
+const { ipcRenderer } = require('electron');
+ipcRenderer.on('data-loaded', async (event, jsonContent) => {
+  try {
+    const loadedData = JSON.parse(jsonContent);
+    if (!Array.isArray(loadedData)) {
+      showAppAlert("Error", "The selected file does not contain a valid list of notes.");
+      return;
+    }
+
+    // *** UPDATED: Use custom confirm modal ***
+    showAppConfirm(
+      "Import Profile?",
+      `Found ${loadedData.length} notes in file.\n\nWARNING: This will overwrite ALL notes in the current profile: '${CURRENT_PROFILE_KEY}'.\n\nAre you sure?`,
+      async () => {
+        notes = loadedData;
+        await saveNotes();
+        selectedNoteId = null;
+        selectedImageId = null;
+        renderAll();
+        showAppAlert("Success", "Your profile has been imported successfully.");
+      },
+      true // Danger
+    );
+
+  } catch (e) {
+    console.error("Import failed:", e);
+    showAppAlert("Error", "Error parsing file. Is it a valid JSON file?");
   }
 });
 
-// Footer controls
-const cropMinusBtn = document.getElementById("cropMinusBtn");
-const cropPlusBtn = document.getElementById("cropPlusBtn");
-const cropCenterBtn = document.getElementById("cropCenterBtn");
-const cropSizeRange = document.getElementById("cropSizeRange");
-
-function syncCropControls() {
-  const stage = getDisplayedImageRect();
-  const minSize = Math.max(
-    40,
-    Math.min(80, Math.min(stage.width, stage.height) * 0.08)
-  );
-  const maxSize = Math.min(stage.width, stage.height);
-  cropSizeRange.min = String(Math.floor(minSize));
-  cropSizeRange.max = String(Math.floor(maxSize));
-  cropSizeRange.value = String(
-    Math.floor(els.cropBox.getBoundingClientRect().width)
-  );
-}
-
-cropMinusBtn?.addEventListener("click", () => {
-  const rect = els.cropBox.getBoundingClientRect();
-  positionCropBox(rect.left, rect.top, rect.width * 0.92);
-});
-cropPlusBtn?.addEventListener("click", () => {
-  const rect = els.cropBox.getBoundingClientRect();
-  positionCropBox(rect.left, rect.top, rect.width * 1.08);
-});
-cropCenterBtn?.addEventListener("click", () => {
-  const stage = getDisplayedImageRect();
-  const size = els.cropBox.getBoundingClientRect().width;
-  const x = stage.left + (stage.width - size) / 2;
-  const y = stage.top + (stage.height - size) / 2;
-  positionCropBox(x, y, size);
-});
-cropSizeRange?.addEventListener("input", (e) => {
-  const rect = els.cropBox.getBoundingClientRect();
-  const size = Number(e.target.value) || rect.width;
-  positionCropBox(rect.left, rect.top, size);
-});
-
-function setZoom(z) {
-  const zoom = Math.max(0.25, Math.min(z, 3));
-  cropperState.zoom = zoom;
-  els.cropperImage.style.setProperty('--crop-zoom', String(zoom));
-  const rect = els.cropBox.getBoundingClientRect();
-  positionCropBox(rect.left, rect.top, rect.width);
-}
-
-if (!els.cropBox.querySelector('.handle')) {
-  ['nw','ne','sw','se'].forEach(dir => {
-    const h = document.createElement('div');
-    h.className = `handle ${dir}`;
-    h.dataset.corner = dir;
-    els.cropBox.appendChild(h);
-  });
-}
-
-let resizing = false;
-let resizeAnchor = { x: 0, y: 0 };
-let resizeCorner = 'se';
-
-function beginResize(e, corner) {
-  e.preventDefault();
-  e.stopPropagation();
-  resizing = true;
-  resizeCorner = corner;
-  const rect = els.cropBox.getBoundingClientRect();
-  if (corner === 'nw') resizeAnchor = { x: rect.right, y: rect.bottom };
-  if (corner === 'ne') resizeAnchor = { x: rect.left, y: rect.bottom };
-  if (corner === 'sw') resizeAnchor = { x: rect.right, y: rect.top };
-  if (corner === 'se') resizeAnchor = { x: rect.left, y: rect.top };
-}
-
-els.cropBox.addEventListener('pointerdown', (e) => {
-  const t = e.target;
-  if (t && t.classList && t.classList.contains('handle')) {
-    beginResize(e, t.dataset.corner);
-    els.cropBox.setPointerCapture(e.pointerId);
-  }
-});
-
-window.addEventListener('pointermove', (e) => {
-  if (!resizing) return;
-  const imgRect = els.cropperImage.getBoundingClientRect();
-  const cx = Math.max(imgRect.left, Math.min(e.clientX, imgRect.right));
-  const cy = Math.max(imgRect.top, Math.min(e.clientY, imgRect.bottom));
-  const size = Math.max(20, Math.min(
-    Math.min(imgRect.width, imgRect.height),
-    Math.max(Math.abs(cx - resizeAnchor.x), Math.abs(cy - resizeAnchor.y))
-  ));
-  let x = resizeAnchor.x;
-  let y = resizeAnchor.y;
-  if (resizeCorner === 'nw') { x = resizeAnchor.x - size; y = resizeAnchor.y - size; }
-  if (resizeCorner === 'ne') { x = resizeAnchor.x;       y = resizeAnchor.y - size; }
-  if (resizeCorner === 'sw') { x = resizeAnchor.x - size; y = resizeAnchor.y; }
-  if (resizeCorner === 'se') { x = resizeAnchor.x;       y = resizeAnchor.y; }
-  positionCropBox(x, y, size);
-});
-
-window.addEventListener('pointerup', () => { resizing = false; });
-
-function getDisplayedImageRect() {
-  const stage = els.cropperStage.getBoundingClientRect();
-  const natW = cropperState.naturalWidth || 1;
-  const natH = cropperState.naturalHeight || 1;
-  const fit = Math.min(stage.width / natW, stage.height / natH) * cropperState.zoom;
-  const w = natW * fit;
-  const h = natH * fit;
-  const left = stage.left + (stage.width - w) / 2;
-  const top = stage.top + (stage.height - h) / 2;
-  return { left, top, width: w, height: h, right: left + w, bottom: top + h };
-}
-
+// Cropper Listeners
+els.cropperCloseBtn.addEventListener("click", closeCropper);
+els.cropperCancelBtn.addEventListener("click", closeCropper);
 els.cropperApplyBtn.addEventListener("click", async () => {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
   const img = note.images.find((i) => i.id === cropperState.imageId);
   if (!img) return;
-
   const stage = getDisplayedImageRect();
   const { x, y, size } = cropperState.crop;
   const relX = (x - stage.left) / stage.width;
   const relY = (y - stage.top) / stage.height;
   const relSize = size / stage.width; 
-
-  const sx = Math.max(
-    0,
-    Math.min(cropperState.naturalWidth - 1, relX * cropperState.naturalWidth)
-  );
-  const sy = Math.max(
-    0,
-    Math.min(cropperState.naturalHeight - 1, relY * cropperState.naturalHeight)
-  );
-  const sSize = Math.min(
-    cropperState.naturalWidth,
-    cropperState.naturalHeight,
-    relSize * cropperState.naturalWidth
-  );
-
+  const sx = Math.max(0, Math.min(cropperState.naturalWidth - 1, relX * cropperState.naturalWidth));
+  const sy = Math.max(0, Math.min(cropperState.naturalHeight - 1, relY * cropperState.naturalHeight));
+  const sSize = Math.min(cropperState.naturalWidth, cropperState.naturalHeight, relSize * cropperState.naturalWidth);
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
   canvas.height = 1024;
@@ -840,60 +757,47 @@ els.cropperApplyBtn.addEventListener("click", async () => {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(els.cropperImage, sx, sy, sSize, sSize, 0, 0, 1024, 1024);
   img.dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-
   note.updatedAt = Date.now();
   await saveNotes();
   closeCropper();
   renderAll();
 });
-els.cropperCloseBtn.addEventListener("click", closeCropper);
-els.cropperCancelBtn.addEventListener("click", closeCropper);
 
-// Image Viewer Listeners
-function closeImageViewer() {
-  els.imageViewerModal.setAttribute("aria-hidden", "true");
-  els.modalViewerImage.src = ""; // Clear image
-  // Reset zoom
-  imageViewerZoom = 1;
-  els.modalViewerImage.style.transform = 'scale(1)';
-}
-els.modalViewerCloseBtn.addEventListener("click", closeImageViewer);
-els.imageViewerModal.addEventListener("click", (e) => {
-  if (e.target === els.imageViewerModal) {
-    closeImageViewer();
-  }
-});
-
-// Zoom on wheel in image viewer
-els.imageViewerModal.addEventListener("wheel", (e) => {
-  e.preventDefault(); // Stop page from scrolling
-  
-  // Determine zoom direction
-  const delta = e.deltaY > 0 ? -0.1 : 0.1; // - for wheel down, + for wheel up
-  
-  // Calculate new zoom level, clamped between 0.5x and 5x
-  imageViewerZoom = Math.max(0.5, Math.min(imageViewerZoom + delta, 5));
-  
-  // Apply the zoom
-  els.modalViewerImage.style.transform = `scale(${imageViewerZoom})`;
-}, { passive: false });
-
-// Search filter
-els.searchInput.addEventListener("input", () => {
-  renderAll(); // Re-render all to re-filter and re-select
-});
-
-
-// Keyboard helpers
-window.addEventListener("keydown", (e) => {
-  if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault();
-    saveCurrentNote();
-  }
-});
-
-// Bootstrap (NOW ASYNC)
+// *** BOOTSTRAP ***
 (async () => {
+  // 1. Migration Logic
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+         const migrated = parsed.map(note => {
+           return note; 
+         });
+         await db.set('default_notes', migrated);
+         localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    }
+  } catch (e) { console.error(e); }
+
+  // 2. Smart Profile Loading
+  const keys = await db.getAllKeys();
+  const lastUsed = localStorage.getItem('last_profile');
+
+  if (lastUsed && keys.includes(lastUsed)) {
+    CURRENT_PROFILE_KEY = lastUsed;
+  } else if (keys.length > 0) {
+    // Find the first key that isn't hidden
+    CURRENT_PROFILE_KEY = keys[0];
+    localStorage.setItem('last_profile', CURRENT_PROFILE_KEY);
+  } else {
+    CURRENT_PROFILE_KEY = 'default_notes';
+    await db.set(CURRENT_PROFILE_KEY, []);
+    localStorage.setItem('last_profile', CURRENT_PROFILE_KEY);
+  }
+
+  // 3. Start App
   notes = await loadNotes();
+  updateProfileUI();
   renderAll();
 })();

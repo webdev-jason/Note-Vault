@@ -8,7 +8,13 @@
   </head>
   <body>
     <header class="app-header">
+      <div class="header-left">
+        <button id="currentProfileBtn" class="profile-btn" title="Click to manage profiles">Load Profile</button>
+      </div>
+      
       <h1>Note Vault</h1>
+      
+      <div class="header-right"></div>
     </header>
 
     <main class="app-main">
@@ -74,13 +80,7 @@
       </section>
     </main>
 
-    <div
-      id="cropperModal"
-      class="modal"
-      aria-hidden="true"
-      role="dialog"
-      aria-label="Image cropper"
-    >
+    <div id="cropperModal" class="modal" aria-hidden="true" role="dialog" aria-label="Image cropper">
       <div class="modal-dialog">
         <div class="modal-header">
           <div>Crop Image (1:1)</div>
@@ -106,19 +106,70 @@
       </div>
     </div>
 
-    <div
-      id="imageViewerModal"
-      class="modal"
-      aria-hidden="true"
-      role="dialog"
-      aria-label="Image viewer"
-    >
+    <div id="imageViewerModal" class="modal" aria-hidden="true" role="dialog" aria-label="Image viewer">
       <div class="modal-dialog">
         <div class="modal-body" style="padding: 10px;">
           <img id="modalViewerImage" alt="Zoomed image" />
         </div>
         <div class="modal-footer">
           <button id="modalViewerCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="profileModal" class="modal" aria-hidden="true" role="dialog" aria-label="Manage Profiles">
+      <div class="modal-dialog" style="width: min(90vw, 500px)">
+        <div class="modal-header">
+          <div>Manage Profiles</div>
+          <button id="profileCloseBtn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <span>AVAILABLE PROFILES</span>
+            <div id="profileList" class="profile-list"></div>
+          </div>
+          
+          <div class="field" style="margin-top: 12px;">
+            <span>CREATE NEW PROFILE</span>
+            <div class="field-row">
+              <input id="newProfileInput" type="text" placeholder="Enter new profile name..." />
+              <button id="createProfileBtn" class="primary">Create</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+            <button id="importDataBtn">Import Profile</button>
+            <button id="exportDataBtn">Export Profile</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="appAlertModal" class="modal" aria-hidden="true" style="z-index: 200;">
+      <div class="modal-dialog" style="width: 400px; max-width: 90vw;">
+        <div class="modal-header">
+          <div id="appAlertTitle">Alert</div>
+          <button id="appAlertCloseBtn">✕</button>
+        </div>
+        <div class="modal-body">
+          <p id="appAlertMessage" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="appAlertOkBtn" class="primary" style="margin-left: auto;">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="appConfirmModal" class="modal" aria-hidden="true" style="z-index: 200;">
+      <div class="modal-dialog" style="width: 400px; max-width: 90vw;">
+        <div class="modal-header">
+          <div id="appConfirmTitle">Confirm</div>
+        </div>
+        <div class="modal-body">
+          <p id="appConfirmMessage" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="appConfirmCancelBtn">Cancel</button>
+          <button id="appConfirmOkBtn" class="danger">OK</button>
         </div>
       </div>
     </div>
