@@ -93,13 +93,17 @@ ipcMain.on('print-to-pdf', (event, partId) => {
 // --- EXPORT/IMPORT LOGIC ---
 
 // 1. Handle Export Profile
-ipcMain.on('export-data', (event, notesData) => {
+// UPDATED: Now accepts a 'filename' argument for the default path
+ipcMain.on('export-data', (event, notesData, filename) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
 
+  // Use the provided filename, or fallback to a generic default
+  const defaultName = filename || 'note-vault-profile.json';
+
   dialog.showSaveDialog(win, {
     title: 'Export Profile',
-    defaultPath: 'note-vault-profile.json',
+    defaultPath: defaultName,
     filters: [{ name: 'JSON Files', extensions: ['json'] }]
   }).then(result => {
     if (result.canceled || !result.filePath) {
@@ -114,7 +118,6 @@ ipcMain.on('export-data', (event, notesData) => {
       } else {
         dialog.showMessageBox(win, {
           title: 'Export Successful',
-          // CHANGED: Updated message per your request
           message: 'Your profile has been exported successfully.'
         });
       }
