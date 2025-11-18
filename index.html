@@ -15,7 +15,16 @@
       
       <h1>Note Vault</h1>
       
-      <div class="header-right"></div>
+      <div class="header-right">
+        <div id="themeToggleWrapper" class="theme-toggle-wrapper" title="Switch Theme">
+          <button id="themeLightBtn" class="theme-btn" aria-label="Light Mode">
+            <i class="fa-solid fa-sun"></i>
+          </button>
+          <button id="themeDarkBtn" class="theme-btn active" aria-label="Dark Mode">
+            <i class="fa-solid fa-moon"></i>
+          </button>
+        </div>
+      </div>
     </header>
 
     <main class="app-main">
@@ -40,7 +49,7 @@
 
       <section class="panel panel-right" aria-label="Note editor">
         <div class="editor-header">
-          <button id="addNoteBtn">
+          <button id="addNoteBtn" class="primary">
             <i class="fa-solid fa-plus"></i> Add New Note
           </button>
           <button id="copyNoteBtn">

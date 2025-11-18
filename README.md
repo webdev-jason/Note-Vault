@@ -9,7 +9,7 @@ It is designed for QA, manufacturing, or engineering workflows where data privac
 ## ✨ Features
 
 * **🔒 Offline & Private:** Data is stored locally in `IndexedDB`. No cloud servers, no internet connection required.
-* **👤 Profile Management:** Create, switch, and delete multiple profiles (e.g., "Jason", "Project A") to keep different datasets organized.
+* **👤 Profile Management:** Create, switch, and delete multiple profiles (e.g., "Work", "Personal", "Project A") to keep different datasets organized.
 * **📄 PDF Export:** Native integration to print nicely formatted notes to PDF.
 * **💾 Import / Export:** Backup your entire profile to a JSON file or transfer data between machines.
 * **🖼️ Advanced Image Tools:**
@@ -45,10 +45,10 @@ Clone the repository and install the dependencies automatically:
 
 ```bash
 # Clone the repo
-git clone [https://github.com/webdev-jason/Note-Vault.git](https://github.com/webdev-jason/Note-Vault.git)
+git clone [https://github.com/YOUR_USERNAME/note-vault.git](https://github.com/YOUR_USERNAME/note-vault.git)
 
 # Go into the app folder
-cd Note-Vault
+cd note-vault
 
 # Install Electron via npm
 npm install

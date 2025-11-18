@@ -1,14 +1,42 @@
 :root {
+  /* --- DEFAULT (DARK) THEME --- */
   --bg: #0f1115;
   --panel: #171a21;
   --panel-2: #1e2230;
   --text: #e6eaf2;
   --muted: #a6afc3;
   --accent: #5bbcff;
-  --danger: #ff6b6b;
-  --primary: #66d18f;
+  
+  /* --- UNIFIED MIDTONE COLORS (Work in both Dark & Light) --- */
+  --danger: #da3633;   /* Midtone Red */
+  --primary: #2ea043;  /* Midtone Green */
+  
+  --btn-text: #ffffff; /* Always white text */
+
   --border: #2a3042;
   --shadow: 0 10px 30px rgba(0,0,0,0.35);
+  
+  /* Thumbnail Overlay Colors */
+  --overlay-bg: rgba(23, 26, 33, 0.85);
+  --overlay-text: #e6eaf2;
+}
+
+/* --- LIGHT THEME OVERRIDES --- */
+[data-theme="light"] {
+  --bg: #f0f2f5;
+  --panel: #ffffff;
+  --panel-2: #f7f9fc;
+  --text: #1a202c;
+  --muted: #718096;
+  --accent: #3182ce;
+  
+  /* Note: --danger and --primary are inherited from :root now */
+  
+  --border: #cbd5e0;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+  --overlay-bg: rgba(255, 255, 255, 0.95);
+  --overlay-text: #1a202c;
 }
 
 * { box-sizing: border-box; }
@@ -16,19 +44,19 @@ html, body { height: 100%; overflow: hidden; }
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, #0e1014, #0b0d10);
+  background: var(--bg);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   background-attachment: fixed;
   
-  /* NEW: Use Flex Column layout for the whole window */
+  /* Flex Column layout for the whole window */
   display: flex;
   flex-direction: column;
 }
 
 /* --- GLOBAL SCROLLBAR STYLES --- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb { background: var(--muted); opacity: 0.5; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-corner { background: transparent; }
 
@@ -40,13 +68,11 @@ body {
   padding: 12px 16px;
   background: var(--panel);
   
-  /* NEW: Bubble Styling */
-  margin: 12px 12px 0 12px; /* Detach from top/left/right */
-  border: 1px solid var(--border); /* Full border */
-  border-radius: 12px; /* Rounded corners */
-  box-shadow: var(--shadow); /* Match panel shadow */
+  margin: 12px 12px 0 12px; 
+  border: 1px solid var(--border); 
+  border-radius: 12px; 
+  box-shadow: var(--shadow); 
   
-  /* Prevent header from shrinking */
   flex-shrink: 0;
 }
 
@@ -67,6 +93,44 @@ body {
   justify-content: flex-end;
 }
 
+/* --- THEME TOGGLE STYLES --- */
+.theme-toggle-wrapper {
+  display: flex;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 20px; /* Pill shape */
+  padding: 2px;
+  gap: 2px;
+}
+
+.theme-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-btn:hover {
+  color: var(--text);
+}
+
+/* Active State (Depressed) */
+.theme-btn.active {
+  background: var(--bg); /* Looks "inset" */
+  color: var(--accent);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+  font-weight: bold;
+}
+
+
+/* --- BUTTON STYLES --- */
 button {
   appearance: none;
   border: 1px solid var(--border);
@@ -81,8 +145,24 @@ button {
   justify-content: center;
   gap: 6px; 
 }
-button.primary { background: linear-gradient(180deg, #1a3a28, #0f2719); border-color: #1f4a33; color: #b9ffd7; }
-button.danger { background: linear-gradient(180deg, #3a1a1a, #27100f); border-color: #4a1f1f; color: #ffd6d6; }
+
+/* USE VARIABLES DIRECTLY */
+button.primary { 
+  background: var(--primary); 
+  border-color: transparent; 
+  color: var(--btn-text); 
+  font-weight: 600;
+}
+button.primary:hover { opacity: 0.9; }
+
+button.danger { 
+  background: var(--danger); 
+  border-color: transparent; 
+  color: var(--btn-text); 
+  font-weight: 600;
+}
+button.danger:hover { opacity: 0.9; }
+
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Profile specific buttons */
@@ -115,12 +195,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: grid;
   grid-template-columns: 140px 1fr 420px;
   gap: 12px;
-  padding: 12px; /* This provides the gap between Header/Main and Main/Bottom */
+  padding: 12px; 
   
-  /* NEW: Flex logic to fill remaining space */
   flex: 1; 
   height: auto; 
-  min-height: 0; /* Critical for grid scrolling */
+  min-height: 0; 
   
   --thumb-content-width: 800px;
   --thumb-scale-factor: 0.145;
@@ -282,13 +361,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .thumb-overlay .title {
   font-size: 14px;
   font-weight: 700;
-  color: var(--text);
-  background: rgba(23, 26, 33, 0.85);
+  
+  /* Use Specific Overlay Vars */
+  color: var(--overlay-text);
+  background: var(--overlay-bg);
+  
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 4px 8px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
@@ -482,12 +564,6 @@ input[type="text"] { width: 100%; padding: 8px 10px; background: var(--panel-2);
 }
 .field-row input { flex: 1; }
 
-/* Scrollbars */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-.images-container::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
-
 /* Media Queries */
 @media (max-width: 1200px) { .app-main { grid-template-columns: 120px 1fr 360px; --thumb-scale-factor: 0.12; } }
 @media (max-width: 980px) { 
@@ -501,16 +577,102 @@ input[type="text"] { width: 100%; padding: 8px 10px; background: var(--panel-2);
 .app-main.view-expanded .viewer { font-size: 125%; }
 .app-main.view-expanded .panel-left, .app-main.view-expanded .panel-right { display: none; }
 
-/* Print Styles */
+/* Print Styles - OVERRIDE ALL SCREENS SETTINGS */
 @media print {
-  body > *:not(.app-main), .app-main > *:not(.panel-center), .panel-center > *:not(.viewer), .viewer-header { display: none; }
-  body { background: #fff; color: #000; }
-  .app-main, .panel-center { display: block; width: 100%; height: auto; overflow: visible; box-shadow: none; border: none; padding: 0; margin: 0; }
-  .viewer { display: block; overflow: visible; padding: 0.5in; font-size: 12pt; color: #000; gap: 0; }
-  .viewer .print-part-id { display: block; text-align: center; font-size: 24pt; font-weight: bold; margin-bottom: 24px; color: #000; }
-  .viewer .note-body { background: #fff; border: none; color: #000; font-size: 12pt; white-space: pre-wrap; border-radius: 8px; padding: 12px; }
-  .viewer .images { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; }
-  .viewer .image-card { flex: 1 1 30%; max-width: 31%; page-break-inside: avoid; }
-  .viewer .image-card .image-frame { background: #fff; border: 1px solid #ccc; }
-  .viewer .image-card .caption { background: #fff; border: 1px solid #ccc; color: #000; border-radius: 8px; padding: 8px; }
+  /* 1. FORCE RESET ROOT */
+  html, body { 
+    height: auto !important; 
+    overflow: visible !important; 
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 2. HIDE UI ELEMENTS */
+  body > *:not(.app-main), 
+  .app-main > *:not(.panel-center), 
+  .panel-center > *:not(.viewer), 
+  .viewer-header { 
+    display: none !important; 
+  }
+
+  /* 3. RESET APP MAIN (Grid -> Block) */
+  .app-main {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 4. RESET PANEL */
+  .panel-center {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 5. VIEWER CONTENT */
+  .viewer {
+    display: block !important;
+    overflow: visible !important;
+    padding: 0.5in !important;
+    font-size: 12pt !important;
+    color: #000 !important;
+  }
+  
+  .viewer .print-part-id { 
+    display: block !important; 
+    text-align: center; 
+    font-size: 24pt; 
+    font-weight: bold; 
+    margin-bottom: 24px; 
+    color: #000; 
+  }
+  
+  .viewer .note-body { 
+    background: #fff; 
+    border: none; 
+    color: #000; 
+    font-size: 12pt; 
+    white-space: pre-wrap; 
+    border-radius: 8px; 
+    padding: 0; 
+  }
+  
+  .viewer .images { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 16px; 
+    margin-top: 16px; 
+  }
+  
+  /* Prevent Images from breaking across pages awkwardly */
+  .viewer .image-card { 
+    flex: 1 1 30%; 
+    max-width: 31%; 
+    page-break-inside: avoid; 
+    break-inside: avoid;
+  }
+  
+  .viewer .image-card .image-frame { 
+    background: #fff; 
+    border: 1px solid #ccc; 
+  }
+  
+  .viewer .image-card .caption { 
+    background: #fff; 
+    border: 1px solid #ccc; 
+    color: #000; 
+    border-radius: 8px; 
+    padding: 8px; 
+  }
 }

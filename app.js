@@ -113,6 +113,9 @@ const els = {
   exportDataBtn: document.getElementById("exportDataBtn"),
   importDataBtn: document.getElementById("importDataBtn"),
   currentProfileBtn: document.getElementById("currentProfileBtn"),
+  // Theme Buttons
+  themeLightBtn: document.getElementById("themeLightBtn"),
+  themeDarkBtn: document.getElementById("themeDarkBtn"),
   // Profile Modal
   profileModal: document.getElementById("profileModal"),
   profileCloseBtn: document.getElementById("profileCloseBtn"),
@@ -161,6 +164,33 @@ function debounce(func, wait) {
     clearTimeout(timeout);
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
+}
+
+// --- THEME TOGGLE LOGIC ---
+function setTheme(theme) {
+  // Set Attribute
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    els.themeLightBtn.classList.add('active');
+    els.themeDarkBtn.classList.remove('active');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    els.themeDarkBtn.classList.add('active');
+    els.themeLightBtn.classList.remove('active');
+  }
+  // Save Preference
+  localStorage.setItem('app_theme', theme);
+}
+
+els.themeLightBtn.addEventListener("click", () => setTheme('light'));
+els.themeDarkBtn.addEventListener("click", () => setTheme('dark'));
+
+// Load saved theme on startup
+const savedTheme = localStorage.getItem('app_theme');
+if (savedTheme) {
+  setTheme(savedTheme);
+} else {
+  setTheme('dark'); // Default
 }
 
 // --- INTERNAL MODAL SYSTEM ---
