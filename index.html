@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Note Vault</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -20,7 +21,10 @@
     <main class="app-main">
       <section class="panel panel-left" aria-label="Note index">
         <div class="panel-header">
-          <input type="text" id="searchInput" placeholder="Filter by Part ID..." />
+          <div class="search-wrapper">
+            <input type="text" id="searchInput" placeholder="Filter by Part ID..." />
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          </div>
         </div>
         <div id="notesList" class="notes-list" role="list"></div>
       </section>
@@ -36,7 +40,15 @@
 
       <section class="panel panel-right" aria-label="Note editor">
         <div class="editor-header">
-          <button id="addNoteBtn">Add New Note</button>
+          <button id="addNoteBtn">
+            <i class="fa-solid fa-plus"></i> Add New Note
+          </button>
+          <button id="copyNoteBtn">
+            <i class="fa-solid fa-copy"></i> Copy Note
+          </button>
+          <button id="deleteNoteBtn" class="danger">
+            <i class="fa-solid fa-trash-can"></i> Delete Note
+          </button>
         </div>
         <form id="editorForm" class="editor" autocomplete="off">
           <label class="field">
@@ -48,7 +60,8 @@
               required
             />
           </label>
-          <label class="field">
+          
+          <label id="notesField" class="field">
             <span>INSPECTION NOTES</span>
             <textarea
               id="notesInput"
@@ -71,11 +84,6 @@
               placeholder="Caption applies to selected image"
             />
           </label>
-
-          <div class="editor-actions">
-            <button id="saveNoteBtn" class="primary" type="button">Save Note</button>
-            <button id="deleteNoteBtn" class="danger" type="button">Delete Note</button>
-          </div>
         </form>
       </section>
     </main>

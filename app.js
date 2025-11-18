@@ -98,7 +98,7 @@ const els = {
   viewer: document.getElementById("viewer"),
   viewerTitle: document.getElementById("viewerTitle"),
   addNoteBtn: document.getElementById("addNoteBtn"),
-  saveNoteBtn: document.getElementById("saveNoteBtn"),
+  copyNoteBtn: document.getElementById("copyNoteBtn"), 
   deleteNoteBtn: document.getElementById("deleteNoteBtn"),
   partIdInput: document.getElementById("partIdInput"),
   notesInput: document.getElementById("notesInput"),
@@ -153,6 +153,16 @@ const els = {
   modalViewerCloseBtn: document.getElementById("modalViewerCloseBtn"),
 };
 
+// --- UTILS ---
+// Debounce helper for autosave
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
 // --- INTERNAL MODAL SYSTEM ---
 let confirmCallback = null;
 
@@ -198,7 +208,7 @@ els.appConfirmOkBtn.addEventListener("click", () => {
 });
 // --- END MODAL SYSTEM ---
 
-// --- ORIGINAL CROPPER LOGIC RESTORED + UNIFIED INTERACTION ---
+// --- CROPPER LOGIC ---
 let cropperState = {
   imageId: null,
   naturalWidth: 0,
@@ -225,7 +235,6 @@ async function openCropper(imgObj) {
     cropperState.naturalWidth = els.cropperImage.naturalWidth;
     cropperState.naturalHeight = els.cropperImage.naturalHeight;
     
-    // Restore Previous Crop if available
     if (imgObj.lastCrop) {
         const s = imgObj.lastCrop.relSize * rect.width;
         const x = rect.left + (imgObj.lastCrop.relX * rect.width);
@@ -266,10 +275,9 @@ function positionCropBox(viewX, viewY, viewSize) {
   syncCropControls();
 }
 
-// --- UNIFIED MOUSE INTERACTION (Fixed "Sticky" Drag) ---
 const interaction = {
   active: false,
-  mode: null, // 'move' or 'resize'
+  mode: null,
   startX: 0,
   startY: 0,
   startRect: null,
@@ -279,7 +287,7 @@ const interaction = {
 
 els.cropBox.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  e.stopPropagation(); // Stop propagation to image click listener
+  e.stopPropagation(); 
   
   const target = e.target;
   const isHandle = target.classList.contains('handle');
@@ -293,7 +301,6 @@ els.cropBox.addEventListener("pointerdown", (e) => {
     interaction.mode = 'resize';
     interaction.resizeCorner = target.dataset.corner || (target.classList.contains('nw') ? 'nw' : target.classList.contains('ne') ? 'ne' : target.classList.contains('sw') ? 'sw' : 'se');
     
-    // Calculate anchor point (opposite of handle)
     const rect = interaction.startRect;
     if (interaction.resizeCorner === 'nw') interaction.resizeAnchor = { x: rect.right, y: rect.bottom };
     if (interaction.resizeCorner === 'ne') interaction.resizeAnchor = { x: rect.left, y: rect.bottom };
@@ -318,8 +325,6 @@ window.addEventListener("pointermove", (e) => {
   } 
   else if (interaction.mode === 'resize') {
     const imgRect = els.cropperImage.getBoundingClientRect();
-    
-    // Calculate distance from anchor
     const cx = Math.max(imgRect.left, Math.min(e.clientX, imgRect.right));
     const cy = Math.max(imgRect.top, Math.min(e.clientY, imgRect.bottom));
     
@@ -343,10 +348,8 @@ window.addEventListener("pointermove", (e) => {
 window.addEventListener("pointerup", (e) => {
   interaction.active = false;
   interaction.mode = null;
-  // Implicitly releases capture
 });
 
-// Wheel Zoom for Cropper
 els.cropBox.addEventListener(
   "wheel",
   (e) => {
@@ -359,7 +362,6 @@ els.cropBox.addEventListener(
   { passive: false }
 );
 
-// Click image to center crop box
 els.cropperImage.addEventListener("click", (e) => {
   const stage = getDisplayedImageRect();
   const cbRect = els.cropBox.getBoundingClientRect();
@@ -369,7 +371,6 @@ els.cropperImage.addEventListener("click", (e) => {
   positionCropBox(targetX, targetY, size);
 });
 
-// Keyboard controls
 els.cropBox.addEventListener("keydown", (e) => {
   const rect = els.cropBox.getBoundingClientRect();
   const step = e.shiftKey ? 10 : 2;
@@ -497,7 +498,6 @@ els.cropperApplyBtn.addEventListener("click", async () => {
   ctx.drawImage(els.cropperImage, sx, sy, sSize, sSize, 0, 0, 1024, 1024);
   img.dataUrl = canvas.toDataURL("image/jpeg", 0.92);
 
-  // Save Crop State
   img.lastCrop = { relX, relY, relSize };
 
   note.updatedAt = Date.now();
@@ -512,8 +512,7 @@ els.cropperCancelBtn.addEventListener("click", closeCropper);
 // --- IMAGE VIEWER LOGIC ---
 function closeImageViewer() {
   els.imageViewerModal.setAttribute("aria-hidden", "true");
-  els.modalViewerImage.src = ""; // Clear image
-  // Reset zoom
+  els.modalViewerImage.src = ""; 
   imageViewerZoom = 1;
   els.modalViewerImage.style.transform = 'scale(1)';
 }
@@ -524,17 +523,10 @@ els.imageViewerModal.addEventListener("click", (e) => {
   }
 });
 
-// Zoom on wheel in image viewer
 els.imageViewerModal.addEventListener("wheel", (e) => {
-  e.preventDefault(); // Stop page from scrolling
-  
-  // Determine zoom direction
-  const delta = e.deltaY > 0 ? -0.1 : 0.1; // - for wheel down, + for wheel up
-  
-  // Calculate new zoom level, clamped between 0.5x and 5x
+  e.preventDefault(); 
+  const delta = e.deltaY > 0 ? -0.1 : 0.1; 
   imageViewerZoom = Math.max(0.5, Math.min(imageViewerZoom + delta, 5));
-  
-  // Apply the zoom
   els.modalViewerImage.style.transform = `scale(${imageViewerZoom})`;
 }, { passive: false });
 
@@ -549,7 +541,6 @@ els.printBtn.addEventListener("click", () => {
 // --- EXPORT / IMPORT LISTENERS ---
 els.exportDataBtn.addEventListener("click", () => {
   const { ipcRenderer } = require('electron');
-  // Generate dynamic filename: ProfileName_notevault.json
   const filename = `${CURRENT_PROFILE_KEY}_notevault.json`;
   ipcRenderer.send('export-data', notes, filename);
 });
@@ -600,7 +591,6 @@ async function saveNotes() {
     await db.set(CURRENT_PROFILE_KEY, notes);
   } catch (e) {
     console.error("Fatal error saving to IndexedDB:", e);
-    // Use our new alert
     showAppAlert("Database Error", "FATAL ERROR: Could not save notes. " + e.message);
   }
 }
@@ -637,7 +627,6 @@ async function switchProfile(newKey, close = true) {
   }
 }
 
-// Delete Profile using new custom modal
 function deleteProfile(keyToDelete) {
   if (keyToDelete === CURRENT_PROFILE_KEY) {
     showAppAlert("Cannot Delete", "You cannot delete the active profile. Switch to another one first.");
@@ -650,12 +639,11 @@ function deleteProfile(keyToDelete) {
     async () => {
       await db.deleteKey(keyToDelete);
       await renderProfileList(); 
-      // Fix focus stealing
       setTimeout(() => {
         if (els.newProfileInput) els.newProfileInput.focus();
       }, 50);
     },
-    true // Danger style
+    true 
   );
 }
 
@@ -781,6 +769,10 @@ function createNoteContentView(note) {
 function renderNotesList() {
   const filterText = els.searchInput.value.toLowerCase().trim();
   els.notesList.innerHTML = "";
+  
+  // MODIFIED: Remove sorting to honor insertion order (Add/Copy to bottom)
+  // notes.sort((a, b) => a.partId.localeCompare(b.partId)); <--- REMOVED
+
   notes
     .filter(note => {
       if (filterText === "") return true;
@@ -836,7 +828,6 @@ function renderViewer() {
 function renderEditor() {
   const note = notes.find((n) => n.id === selectedNoteId);
   const isNew = !note;
-  els.saveNoteBtn.disabled = isNew;
   els.deleteNoteBtn.disabled = isNew;
   if (isNew) {
     els.partIdInput.value = "";
@@ -892,7 +883,7 @@ function renderEditor() {
 }
 
 function renderAll() {
-  notes.sort((a, b) => a.partId.localeCompare(b.partId));
+  // Removed sorting to honor natural order
   ensureSelection();
   renderNotesList();
   renderViewer();
@@ -926,15 +917,64 @@ async function saveCurrentNote() {
   renderAll();
 }
 
-async function deleteCurrentNote() {
+// --- UPDATED DELETE FUNCTION WITH CONFIRMATION ---
+function deleteCurrentNote() {
   if (!selectedNoteId) return;
-  const idx = notes.findIndex((n) => n.id === selectedNoteId);
-  if (idx >= 0) notes.splice(idx, 1);
-  selectedNoteId = null;
-  selectedImageId = null;
+  
+  showAppConfirm(
+    "Delete Note?",
+    "Are you sure you want to delete this note? This action cannot be undone.",
+    async () => {
+      const idx = notes.findIndex((n) => n.id === selectedNoteId);
+      if (idx >= 0) notes.splice(idx, 1);
+      selectedNoteId = null;
+      selectedImageId = null;
+      await saveNotes();
+      renderAll();
+    },
+    true // Danger mode
+  );
+}
+
+// --- NEW COPY FUNCTION ---
+async function copyCurrentNote() {
+  const originalNote = notes.find(n => n.id === selectedNoteId);
+  if (!originalNote) return;
+
+  // Deep copy images including lastCrop properties
+  const newImages = originalNote.images.map(img => {
+    const clone = { ...img, id: generateId("img") };
+    if (img.lastCrop) clone.lastCrop = { ...img.lastCrop };
+    return clone;
+  });
+
+  const newNote = {
+    ...originalNote,
+    id: generateId("note"), 
+    partId: `${originalNote.partId} (COPY)`, // Updated to (COPY)
+    images: newImages,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+
+  // Add to bottom (end of array)
+  notes.push(newNote);
+
+  // Select new note
+  selectedNoteId = newNote.id;
+  selectedImageId = null; 
+
   await saveNotes();
   renderAll();
+
+  // Scroll list to bottom
+  setTimeout(() => {
+     const list = document.getElementById("notesList");
+     if (list) list.scrollTop = list.scrollHeight;
+  }, 50);
 }
+els.copyNoteBtn.addEventListener("click", copyCurrentNote);
+// ---------------------------
 
 async function addImagesFromFiles(fileList) {
   const note = notes.find((n) => n.id === selectedNoteId);
@@ -1042,18 +1082,6 @@ async function compressDataUrl(dataUrl, opts) {
   }
 }
 
-async function updateSelectedImageCaption(value) {
-  const note = notes.find((n) => n.id === selectedNoteId);
-  if (!note) return;
-  const img = note.images.find((i) => i.id === selectedImageId);
-  if (!img) return;
-  img.caption = value;
-  note.updatedAt = Date.now();
-  await saveNotes();
-  renderEditor();
-  renderViewer();
-}
-
 async function removeImage(imageId) {
   const note = notes.find((n) => n.id === selectedNoteId);
   if (!note) return;
@@ -1066,11 +1094,53 @@ async function removeImage(imageId) {
 }
 
 els.addNoteBtn.addEventListener("click", createNote);
-els.saveNoteBtn.addEventListener("click", saveCurrentNote);
 els.deleteNoteBtn.addEventListener("click", deleteCurrentNote);
 els.addImageBtn.addEventListener("click", () => els.imageInput.click());
 els.imageInput.addEventListener("change", (e) => addImagesFromFiles(e.target.files));
-els.imageCaptionInput.addEventListener("input", (e) => updateSelectedImageCaption(e.target.value));
+
+// --- AUTOSAVE IMPLEMENTATION ---
+
+// 1. Create debounced save function (saves to DB after 1s of inactivity)
+const triggerAutosave = debounce(async () => {
+  // Save current state to DB
+  await saveNotes();
+  // Optional: You could add a "Saved" indicator here
+}, 1000);
+
+// 2. Auto-update memory and trigger autosave on text input
+function handleNoteInput() {
+  const note = notes.find((n) => n.id === selectedNoteId);
+  if (!note) return;
+  
+  // Update in-memory object immediately
+  note.partId = els.partIdInput.value; // Don't trim while typing or spaces get eaten
+  note.body = els.notesInput.value;
+  note.updatedAt = Date.now();
+  
+  // Queue the database save
+  triggerAutosave();
+}
+
+// 3. Attach listeners
+els.partIdInput.addEventListener("input", handleNoteInput);
+els.notesInput.addEventListener("input", handleNoteInput);
+
+// 4. Handle Caption Input (Also autosave)
+els.imageCaptionInput.addEventListener("input", (e) => {
+  const note = notes.find((n) => n.id === selectedNoteId);
+  if (!note) return;
+  const img = note.images.find((i) => i.id === selectedImageId);
+  if (!img) return;
+  
+  img.caption = e.target.value;
+  note.updatedAt = Date.now();
+  triggerAutosave();
+  // We update the editor view immediately so the caption on the card updates
+  // But we don't re-render the whole editor to keep focus
+  const activeCard = document.querySelector('.img-card.active .caption');
+  if(activeCard) activeCard.textContent = img.caption;
+});
+
 els.searchInput.addEventListener("input", renderNotesList);
 els.imagesContainer.addEventListener("wheel", (e) => {
   if (e.deltaY !== 0) {
@@ -1082,7 +1152,6 @@ els.expandBtn.addEventListener("click", () => {
   const isExpanded = els.appMain.classList.toggle("view-expanded");
   els.expandBtn.textContent = isExpanded ? "Collapse Note" : "Expand Note";
 });
-
 
 // *** BOOTSTRAP ***
 (async () => {
