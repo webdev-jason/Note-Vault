@@ -1,7 +1,7 @@
 {
   "name": "note-vault",
   "productName": "Note Vault",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A secure, offline-first technical inspection note app.",
   "main": "main.js",
   "scripts": {

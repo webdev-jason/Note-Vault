@@ -41,7 +41,12 @@
       <section class="panel panel-center" aria-label="Note viewer">
         <div class="viewer-header">
           <button id="expandBtn">Expand Note</button>
-          <button id="printBtn">Export to PDF</button>
+          <button id="printBtn">Save PDF</button>
+          
+          <div id="pdfLoader">
+            <i class="fa-solid fa-circle-notch fa-spin"></i> Saving PDF...
+          </div>
+
           <div class="viewer-title" id="viewerTitle">—</div>
         </div>
         <article id="viewer" class="viewer" aria-live="polite"></article>
@@ -49,12 +54,18 @@
 
       <section class="panel panel-right" aria-label="Note editor">
         <div class="editor-header">
-          <button id="addNoteBtn" class="primary">
-            <i class="fa-solid fa-plus"></i> Add New Note
+          <button id="saveNoteBtn" class="primary">
+            <i class="fa-solid fa-floppy-disk"></i> Save Note
           </button>
+          
+          <button id="addNoteBtn">
+            <i class="fa-solid fa-plus"></i> New Note
+          </button>
+
           <button id="copyNoteBtn">
             <i class="fa-solid fa-copy"></i> Copy Note
           </button>
+          
           <button id="deleteNoteBtn" class="danger">
             <i class="fa-solid fa-trash-can"></i> Delete Note
           </button>

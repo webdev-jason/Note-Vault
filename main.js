@@ -2,6 +2,10 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// --- FORCE SYSTEM DATA PATH (Hide DB in AppData) ---
+const appName = 'Note Vault';
+app.setPath('userData', path.join(app.getPath('appData'), appName));
+
 function createWindow () {
   const win = new BrowserWindow({
     width: 1400,
@@ -13,7 +17,6 @@ function createWindow () {
   });
 
   win.loadFile('index.html');
-  // win.webContents.openDevTools(); 
 }
 
 app.whenReady().then(createWindow);
@@ -55,35 +58,28 @@ ipcMain.on('print-to-pdf', (event, partId) => {
       landscape: false
     };
 
-    win.webContents.executeJavaScript(`
-      document.getElementById('expandBtn').style.visibility = 'hidden';
-      document.getElementById('printBtn').style.visibility = 'hidden';
-    `).then(() => {
-      
-      setTimeout(() => {
-        win.webContents.printToPDF(options).then(data => {
-          fs.writeFile(pdfPath, data, (error) => {
-            if (error) {
-              console.error('Failed to write PDF:', error);
-              dialog.showErrorBox('Save PDF Error', 'Failed to save the PDF file.');
-            }
-            
-            win.webContents.executeJavaScript(`
-              document.getElementById('expandBtn').style.visibility = 'visible';
-              document.getElementById('printBtn').style.visibility = 'visible';
-            `);
-          });
-        }).catch(error => {
-          console.error('Failed to print PDF:', error);
-          dialog.showErrorBox('Print PDF Error', 'Failed to generate the PDF.');
-          win.webContents.executeJavaScript(`
-            document.getElementById('expandBtn').style.visibility = 'visible';
-            document.getElementById('printBtn').style.visibility = 'visible';
-          `);
-        });
-      }, 1500); 
+    // --- TOGGLE LOADING UI (New Event-Based Logic) ---
+    // Tell renderer to show loader
+    event.sender.send('pdf-export-started');
 
-    });
+    // Delay slightly to ensure UI updates
+    setTimeout(() => {
+      win.webContents.printToPDF(options).then(data => {
+        fs.writeFile(pdfPath, data, (error) => {
+          if (error) {
+            console.error('Failed to write PDF:', error);
+            dialog.showErrorBox('Save PDF Error', 'Failed to save the PDF file.');
+          }
+          // Tell renderer to hide loader
+          event.sender.send('pdf-export-complete');
+        });
+      }).catch(error => {
+        console.error('Failed to print PDF:', error);
+        dialog.showErrorBox('Print PDF Error', 'Failed to generate the PDF.');
+        // Tell renderer to hide loader on error
+        event.sender.send('pdf-export-complete');
+      });
+    }, 500); 
 
   }).catch(err => {
     console.error('Save dialog error:', err);
@@ -93,7 +89,6 @@ ipcMain.on('print-to-pdf', (event, partId) => {
 // --- EXPORT/IMPORT LOGIC ---
 
 // 1. Handle Export Profile
-// UPDATED: Now accepts a 'filename' argument for the default path
 ipcMain.on('export-data', (event, notesData, filename) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;

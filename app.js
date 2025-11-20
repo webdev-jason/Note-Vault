@@ -99,6 +99,7 @@ const els = {
   viewerTitle: document.getElementById("viewerTitle"),
   addNoteBtn: document.getElementById("addNoteBtn"),
   copyNoteBtn: document.getElementById("copyNoteBtn"), 
+  saveNoteBtn: document.getElementById("saveNoteBtn"), 
   deleteNoteBtn: document.getElementById("deleteNoteBtn"),
   partIdInput: document.getElementById("partIdInput"),
   notesInput: document.getElementById("notesInput"),
@@ -581,6 +582,19 @@ els.importDataBtn.addEventListener("click", () => {
 });
 
 const { ipcRenderer } = require('electron');
+
+// --- NEW LISTENERS FOR PDF LOADER STATE ---
+ipcRenderer.on('pdf-export-started', () => {
+  const header = document.querySelector('.viewer-header');
+  if (header) header.classList.add('printing');
+});
+
+ipcRenderer.on('pdf-export-complete', () => {
+  const header = document.querySelector('.viewer-header');
+  if (header) header.classList.remove('printing');
+});
+// ----------------------------------------
+
 ipcRenderer.on('data-loaded', async (event, jsonContent) => {
   try {
     const loadedData = JSON.parse(jsonContent);
@@ -748,7 +762,8 @@ function ensureSelection() {
     const filterText = els.searchInput.value.toLowerCase().trim();
     const filteredNotes = notes.filter(n => {
       if (filterText === "") return true;
-      return n.partId.toLowerCase().includes(filterText);
+      // CHANGED: .startsWith() for filtering
+      return n.partId.toLowerCase().startsWith(filterText); 
     });
     selectedNoteId = (filteredNotes.length > 0) ? filteredNotes[0].id : null;
   }
@@ -800,13 +815,12 @@ function renderNotesList() {
   const filterText = els.searchInput.value.toLowerCase().trim();
   els.notesList.innerHTML = "";
   
-  // MODIFIED: Remove sorting to honor insertion order (Add/Copy to bottom)
-  // notes.sort((a, b) => a.partId.localeCompare(b.partId)); <--- REMOVED
-
+  // No sorting (add/copy to bottom)
   notes
     .filter(note => {
       if (filterText === "") return true;
-      return note.partId.toLowerCase().includes(filterText);
+      // CHANGED: .startsWith() for filtering
+      return note.partId.toLowerCase().startsWith(filterText);
     })
     .forEach((note) => {
       const clone = els.noteListItemTemplate.content.firstElementChild.cloneNode(true);
@@ -1004,6 +1018,7 @@ async function copyCurrentNote() {
   }, 50);
 }
 els.copyNoteBtn.addEventListener("click", copyCurrentNote);
+els.saveNoteBtn.addEventListener("click", saveCurrentNote);
 // ---------------------------
 
 async function addImagesFromFiles(fileList) {
